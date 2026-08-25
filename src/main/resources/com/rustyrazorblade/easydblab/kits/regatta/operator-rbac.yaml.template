@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: regatta-operator
+  namespace: __NAMESPACE__
+  labels:
+    app.kubernetes.io/name: regatta-operator
+    app.kubernetes.io/component: operator
+    app.kubernetes.io/managed-by: regatta-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: regatta-operator
+  namespace: __NAMESPACE__
+rules:
+  - apiGroups: ["regatta.dev"]
+    resources: ["regattaclusters"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["regatta.dev"]
+    resources: ["regattaclusters/status"]
+    verbs: ["get", "patch", "update"]
+  - apiGroups: ["regatta.dev"]
+    resources: ["regattaclusters/finalizers"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete"]
+  - apiGroups: [""]
+    resources: ["services", "configmaps"]
+    verbs: ["create", "get", "list", "watch", "patch", "update", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "get", "list", "watch", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: regatta-operator
+  namespace: __NAMESPACE__
+subjects:
+  - kind: ServiceAccount
+    name: regatta-operator
+    namespace: __NAMESPACE__
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: regatta-operator

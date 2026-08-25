@@ -1,0 +1,46 @@
+# Regatta on __CLUSTER_NAME__ cluster
+
+Workload: Regatta distributed database via custom Regatta Operator
+Version: __REGATTA_VERSION__
+RDB Replicas: __REPLICAS__
+Block Storage: __STORAGE_SIZE__
+DB nodes: __DB_NODE_COUNT__
+Region: __REGION__
+
+## Endpoints
+
+- **Internal Cluster DNS**:
+  - SM: `regatta-sm.__NAMESPACE__.svc.cluster.local:8840`
+  - RDB Service: `regatta-rdb.__NAMESPACE__.svc.cluster.local:8850`
+  - RDB Pods: `regatta-rdb-0.__NAMESPACE__.svc.cluster.local:8850`, `regatta-rdb-1.__NAMESPACE__.svc.cluster.local:8850`, ...
+
+- **NodePort Exposure** (via node public/private IP):
+  - SM: `http://<db-node-ip>:30840`
+  - RDB: `<db-node-ip>:30850`
+
+## Lifecycle
+
+```bash
+# Install CRD and Operator (configure block device & size if needed)
+easy-db-lab kit install regatta --size 500Gi --rdb-device /dev/loop0
+
+# Start Regatta Cluster (applies PVs, CR, and NodePort service)
+easy-db-lab regatta start
+
+# Stop Regatta Cluster (keeps PV data intact)
+easy-db-lab regatta stop
+
+# Restart Regatta Cluster
+easy-db-lab regatta start
+
+# Uninstall Regatta and delete PVs
+easy-db-lab regatta uninstall
+```
+
+## Running Benchmarks Inside K3s
+
+Launch a test runner pod inside the cluster (pointing to internal service DNS):
+
+```bash
+kubectl apply -f test-runner-pod.yaml -n __NAMESPACE__
+```

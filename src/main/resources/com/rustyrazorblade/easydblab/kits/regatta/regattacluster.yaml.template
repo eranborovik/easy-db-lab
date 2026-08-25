@@ -1,0 +1,69 @@
+apiVersion: regatta.dev/v1alpha1
+kind: RegattaCluster
+metadata:
+  name: __KIT_NAME__
+  namespace: __NAMESPACE__
+spec:
+  version: "26.0"
+  image:
+    repository: __REGATTA_IMAGE_REPOSITORY__
+    tag: "__REGATTA_VERSION__"
+    pullPolicy: IfNotPresent
+    pullSecrets:
+      - ecr-secret
+  security:
+    runAsUser: 1000
+    runAsGroup: 1001
+    fsGroup: 1001
+  sequencer:
+    num_threads: 2
+    ram_MB: 600
+  gdd:
+    num_threads: 1
+    ram_MB: 300
+  dcm:
+    num_threads: 1
+    ram_MB: 350
+  rdb:
+    replicas: __REPLICAS__
+    num_threads: 16
+    ram_MB: 32000
+    port: 8850
+    service_port: 6001
+    blockStorage:
+      provisioning: Dynamic
+      size: __STORAGE_SIZE__
+      storageClassName: local-storage
+      selector:
+        matchLabels:
+          regatta.dev/cluster: __KIT_NAME__-static
+    config:
+      core_enable_mlock_syscall_usage: "0"
+  repoStorage:
+    size: 20Gi
+    storageClassName: local-storage
+    accessModes: [ReadWriteOnce]
+  logs:
+    size: 20Gi
+    storageClassName: local-storage
+    accessModes: [ReadWriteOnce]
+  sharedMemorySize: __SHM_SIZE__
+  resources:
+    sm:
+      requests:
+        cpu: "6"
+        memory: 1250M
+      limits:
+        cpu: "6"
+        memory: 1250M
+    rdb:
+      requests:
+        cpu: "16"
+        memory: 32000M
+      limits:
+        cpu: "24"
+        memory: 64000M
+  lifecycle:
+    configure: true
+    start: true
+

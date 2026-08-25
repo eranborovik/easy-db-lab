@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-rdb-block-__KIT_NAME__-rdb-0
+  labels:
+    regatta.dev/cluster: __KIT_NAME__-static
+spec:
+  capacity:
+    storage: __STORAGE_SIZE__
+  volumeMode: Block
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: __RDB_DEVICE__
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: easydblab.com/node-ordinal
+              operator: In
+              values:
+                - "0"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-repo-__KIT_NAME__-sm-0
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /mnt/db1/__KIT_NAME__/repo-sm-0
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: easydblab.com/node-ordinal
+              operator: In
+              values:
+                - "0"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-logs-__KIT_NAME__-sm-0
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /mnt/db1/__KIT_NAME__/logs-sm-0
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: easydblab.com/node-ordinal
+              operator: In
+              values:
+                - "0"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-repo-__KIT_NAME__-rdb-0
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /mnt/db1/__KIT_NAME__/repo-rdb-0
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: easydblab.com/node-ordinal
+              operator: In
+              values:
+                - "0"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-logs-__KIT_NAME__-rdb-0
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /mnt/db1/__KIT_NAME__/logs-rdb-0
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: easydblab.com/node-ordinal
+              operator: In
+              values:
+                - "0"

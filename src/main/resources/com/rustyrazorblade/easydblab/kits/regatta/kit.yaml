@@ -1,0 +1,137 @@
+name: regatta
+type: db
+description: Deploy Regatta distributed database via the custom Regatta Operator
+version: "1.0.0"
+collision-check: true
+
+runtime:
+  type: pods
+  selector: "app.kubernetes.io/name=regatta"
+  namespace: ${NAMESPACE}
+
+endpoints:
+  - name: "Regatta RDB"
+    node-type: db
+    port: 30850
+    type: native
+  - name: "Regatta SM"
+    node-type: db
+    port: 30840
+    type: http
+
+args:
+  - flag: --version
+    variable: REGATTA_VERSION
+    description: "Regatta image version tag"
+    type: string
+    default: "26.0.0.816"
+  - flag: --regatta-repo
+    variable: REGATTA_IMAGE_REPOSITORY
+    description: "Regatta DB container image repository"
+    type: string
+    default: "611434859749.dkr.ecr.us-east-1.amazonaws.com/kubernetes/regatta"
+  - flag: --operator-image
+    variable: REGATTA_OPERATOR_IMAGE
+    description: "Regatta Operator container image"
+    type: string
+    default: "611434859749.dkr.ecr.us-east-1.amazonaws.com/kubernetes/operator:26.0.0.816"
+  - flag: --replicas
+    variable: REPLICAS
+    description: "Number of RDB replicas (default: db node count)"
+    type: int
+    default: "${DB_NODE_COUNT}"
+  - flag: --size
+    variable: STORAGE_SIZE
+    description: "Storage size per node for RDB block storage"
+    type: string
+    default: "1Ti"
+  - flag: --rdb-device
+    variable: RDB_DEVICE
+    description: "Path to raw block or loop device on DB node for RDB storage"
+    type: string
+    default: "/dev/loop0"
+  - flag: --shm-size
+    variable: SHM_SIZE
+    description: "Memory-backed shared memory size"
+    type: string
+    default: "20Gi"
+  - flag: --namespace
+    variable: NAMESPACE
+    description: "Kubernetes namespace for Regatta cluster and operator"
+    type: string
+    default: "regatta"
+
+install:
+  - type: namespace
+    name: ${NAMESPACE}
+  - type: manifest
+    template: crd.yaml
+  - type: manifest
+    template: operator-rbac.yaml
+  - type: manifest
+    template: operator-deployment.yaml
+  - type: wait
+    kind: Deployment
+    name: regatta-operator
+    namespace: ${NAMESPACE}
+    condition: Available
+    timeout: "180s"
+
+start:
+  - type: manifest
+    template: pvs.yaml
+  - type: manifest
+    template: regattacluster.yaml
+  - type: manifest
+    template: nodeport-service.yaml
+
+stop:
+  - type: delete
+    kind: RegattaCluster
+    name: ${KIT_NAME}
+    namespace: ${NAMESPACE}
+  - type: delete
+    kind: Service
+    name: ${KIT_NAME}-nodeport
+    namespace: ${NAMESPACE}
+
+uninstall:
+  - type: delete
+    kind: PersistentVolume
+    name: pv-rdb-block-${KIT_NAME}-rdb-0
+    ignore-not-found: true
+  - type: delete
+    kind: PersistentVolume
+    name: pv-repo-${KIT_NAME}-sm-0
+    ignore-not-found: true
+  - type: delete
+    kind: PersistentVolume
+    name: pv-logs-${KIT_NAME}-sm-0
+    ignore-not-found: true
+  - type: delete
+    kind: PersistentVolume
+    name: pv-repo-${KIT_NAME}-rdb-0
+    ignore-not-found: true
+  - type: delete
+    kind: PersistentVolume
+    name: pv-logs-${KIT_NAME}-rdb-0
+    ignore-not-found: true
+  - type: delete
+    kind: Deployment
+    name: regatta-operator
+    namespace: ${NAMESPACE}
+  - type: delete
+    kind: RoleBinding
+    name: regatta-operator
+    namespace: ${NAMESPACE}
+  - type: delete
+    kind: Role
+    name: regatta-operator
+    namespace: ${NAMESPACE}
+  - type: delete
+    kind: ServiceAccount
+    name: regatta-operator
+    namespace: ${NAMESPACE}
+  - type: delete
+    kind: CustomResourceDefinition
+    name: regattaclusters.regatta.dev
