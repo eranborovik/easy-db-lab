@@ -178,3 +178,8 @@ profiles/
 .claude/scheduled_tasks*
 
 /.memsearch
+.codebase-memory/
+.scratch/
+.agents/
+docs/wayfinder/
+*HANDOFF*.md
