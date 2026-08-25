@@ -10,7 +10,7 @@ NC='\033[0m' # No Color
 if [ -n "${ZSH_VERSION:-}" ]; then
     CLUSTER_DIR="$(cd "$(dirname "${(%):-%x}")" && pwd)"
 else
-    CLUSTER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    CLUSTER_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 fi
 
 echo -e "${YELLOW_BOLD}[WARNING]${YELLOW} We are creating aliases which override these commands:${NC}"
@@ -143,21 +143,34 @@ _socks5_port() {
     fi
 }
 
-# Check if Tailscale is connected on control node
+# Check if Tailscale is connected specifically to this cluster's control node
 # Returns 0 (true) if connected, 1 (false) otherwise
 is-tailscale-connected() {
-  # Check if tailscale command exists locally
+  # If CONTROL_NODE_IP / CONTROL_NODE_PRIVATE_IP is not set or tailscale is not installed, fallback to proxy
   if ! command -v tailscale &>/dev/null; then
     return 1
   fi
 
-  # Check if Tailscale is connected locally
   local ts_status
   ts_status=$(tailscale status --json 2>/dev/null)
+  if [ -z "$ts_status" ] || ! grep -q '"BackendState":.*"Running"' <<< "$ts_status"; then
+    return 1
+  fi
 
-  # Check if BackendState is "Running"
-  # Use <<< to avoid broken pipe from grep -q closing the pipe early on large JSON
-  [ -n "$ts_status" ] && grep -q '"BackendState":.*"Running"' <<< "$ts_status"
+  # If cluster metadata is present, check if the control node or cluster subnet is in our tailnet peer list
+  if [ -n "${CONTROL_NODE_PRIVATE_IP:-}" ]; then
+    if grep -q "\"$CONTROL_NODE_PRIVATE_IP\"" <<< "$ts_status"; then
+      return 0
+    fi
+    # Also check if cluster name appears as a tailscale peer
+    if [ -n "${CLUSTER_NAME:-}" ] && grep -q "\"HostName\":.*\"${CLUSTER_NAME}-control" <<< "$ts_status"; then
+      return 0
+    fi
+    return 1
+  fi
+
+  # If no cluster IPs are known, default to proxy rather than false positive from other tailnets
+  return 1
 }
 
 # Proxy wrapper for commands that need to access internal network (10.x.x.x)
