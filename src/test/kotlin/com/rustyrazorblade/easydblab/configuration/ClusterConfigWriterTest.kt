@@ -36,9 +36,11 @@ internal class ClusterConfigWriterTest {
 
         assertThat(config).contains("StrictHostKeyChecking=no")
         assertThat(config).contains("UserKnownHostsFile=/dev/null")
+        assertThat(config).contains("IdentitiesOnly yes")
 
         val strictHostKeyCheckingIndex = config.indexOf("StrictHostKeyChecking=no")
         val userKnownHostsFileIndex = config.indexOf("UserKnownHostsFile=/dev/null")
+        val identitiesOnlyIndex = config.indexOf("IdentitiesOnly yes")
         val firstHostBlockIndex = config.indexOf("Host control0")
         assertThat(firstHostBlockIndex).isGreaterThanOrEqualTo(0)
 
@@ -48,6 +50,7 @@ internal class ClusterConfigWriterTest {
         // apply to every host, including hosts with recycled public IPs.
         assertThat(strictHostKeyCheckingIndex).isLessThan(firstHostBlockIndex)
         assertThat(userKnownHostsFileIndex).isLessThan(firstHostBlockIndex)
+        assertThat(identitiesOnlyIndex).isLessThan(firstHostBlockIndex)
     }
 
     @Test

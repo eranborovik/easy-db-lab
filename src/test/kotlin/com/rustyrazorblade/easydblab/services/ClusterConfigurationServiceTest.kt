@@ -100,6 +100,7 @@ class ClusterConfigurationServiceTest {
             assertThat(sshConfig).exists()
             val content = sshConfig.readText()
             assertThat(content).contains("StrictHostKeyChecking=no")
+            assertThat(content).contains("IdentitiesOnly yes")
             assertThat(content).contains("User ubuntu")
             assertThat(content).contains("IdentityFile $TEST_SSH_KEY_PATH")
         }

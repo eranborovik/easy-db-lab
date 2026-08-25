@@ -212,4 +212,26 @@ class WorkloadStepExecutorTest : BaseKoinTest() {
             assertThat(capturedContent).isEqualTo("imageName: \${IMAGE}")
         }
     }
+
+    @Nested
+    inner class NamespaceStep {
+        @Test
+        fun `interpolates step variables in namespace name`() {
+            var capturedName: String? = null
+            org.mockito.kotlin
+                .doAnswer { inv ->
+                    capturedName = inv.getArgument(1)
+                }.whenever(kubectlService)
+                .createNamespace(any(), any())
+
+            val result =
+                execute(
+                    steps = listOf(InstallStep.Namespace("\${NAMESPACE}")),
+                    variables = mapOf("NAMESPACE" to "regatta-prod"),
+                )
+
+            assertThat(result.isSuccess).isTrue()
+            assertThat(capturedName).isEqualTo("regatta-prod")
+        }
+    }
 }
