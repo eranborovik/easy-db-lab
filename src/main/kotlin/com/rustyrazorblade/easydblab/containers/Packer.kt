@@ -26,7 +26,6 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider
 import java.io.File
 import java.nio.file.Path
 import java.time.Duration
-import kotlin.io.path.createTempDirectory
 import kotlin.system.exitProcess
 
 class Packer(
@@ -209,36 +208,40 @@ class Packer(
 
         val args = commands.toMutableList()
 
-        val localPackerPath = context.packerHome + directory
+        val localPackerPath = File(context.packerHome, directory)
 
         require(directory.isNotBlank()) { "Directory cannot be blank" }
 
-        if (!File(localPackerPath).exists()) {
-            eventBus.emit(Event.Docker.PackerDirectoryNotFound(localPackerPath))
+        if (!localPackerPath.exists()) {
+            eventBus.emit(Event.Docker.PackerDirectoryNotFound(localPackerPath.absolutePath))
             exitProcess(1)
         }
 
-        val tempDir = createTempDirectory().toFile()
-        FileUtils.copyDirectory(File(localPackerPath), tempDir)
-        logger.info { "Copied packer files from $localPackerPath to $tempDir" }
+        val packerDirSource =
+            if (!release && directory == Constants.Servers.DATABASE) {
+                // if we're doing a C* image, we need to merge extras into cassandra_versions.yaml
+                val tempDir = File(context.profileDir, "packer-$directory-build").apply { mkdirs() }
+                FileUtils.copyDirectory(localPackerPath, tempDir)
+                logger.info { "Copied packer files from $localPackerPath to $tempDir" }
 
-        if (!release && directory == Constants.Servers.DATABASE) {
-            // if we're doing a C* image, we
-            val initial = Path.of(localPackerPath, Constants.Packer.CASSANDRA_VERSIONS_FILE)
-            val extras = context.cassandraVersionsExtra.toPath()
-            logger.info { "Loading files in $extras" }
+                val initial = Path.of(localPackerPath.absolutePath, Constants.Packer.CASSANDRA_VERSIONS_FILE)
+                val extras = context.cassandraVersionsExtra.toPath()
+                logger.info { "Loading files in $extras" }
 
-            val versions = CassandraVersion.loadFromMainAndExtras(initial, extras)
-            val outputFile = File(tempDir, Constants.Packer.CASSANDRA_VERSIONS_FILE)
-            CassandraVersion.write(versions, outputFile)
-            logger.info { "Written updated versions to $outputFile" }
-        }
+                val versions = CassandraVersion.loadFromMainAndExtras(initial, extras)
+                val outputFile = File(tempDir, Constants.Packer.CASSANDRA_VERSIONS_FILE)
+                CassandraVersion.write(versions, outputFile)
+                logger.info { "Written updated versions to $outputFile" }
+                tempDir
+            } else {
+                localPackerPath
+            }
 
-        logger.info { "Mounting $tempDir to $containerWorkingDir, starting with $args" }
+        logger.info { "Mounting $packerDirSource to $containerWorkingDir, starting with $args" }
 
         // mount credentials
         // get the main process and go up a directory
-        val packerDir = VolumeMapping(tempDir.absolutePath, containerWorkingDir, AccessMode.ro)
+        val packerDir = VolumeMapping(packerDirSource.absolutePath, containerWorkingDir, AccessMode.ro)
         val creds = Constants.Paths.CREDENTIALS_MOUNT
 
         // Packer builds can take 30+ minutes, especially when building from source

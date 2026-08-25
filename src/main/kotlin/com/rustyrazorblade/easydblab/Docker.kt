@@ -376,14 +376,14 @@ class Docker(
             .withEnv(env.toTypedArray())
             .withStdinOpen(true)
 
-        if (volumes.isNotEmpty()) {
-            setupVolumes(dockerCommandBuilder)
-        }
-
         if (workingDirectory.isNotEmpty()) {
             eventBus.emit(Event.Docker.ExecutionWorkDir(workingDirectory))
             bufferedHandler.handleMessage("Setting working directory inside container to $workingDirectory")
             dockerCommandBuilder.withWorkingDir(workingDirectory)
+        }
+
+        if (volumes.isNotEmpty()) {
+            setupVolumes(dockerCommandBuilder)
         }
 
         val dockerContainer = dockerCommandBuilder.exec()
