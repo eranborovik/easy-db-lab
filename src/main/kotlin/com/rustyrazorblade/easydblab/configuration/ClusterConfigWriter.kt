@@ -29,6 +29,9 @@ object ClusterConfigWriter {
         // or writes that file -- matching the MINA SSHD path used everywhere else,
         // which verifies no host keys at all.
         writer.appendLine("UserKnownHostsFile=/dev/null")
+        // Restrict SSH to only use the specified identity file and ignore other keys in ssh-agent
+        // or ~/.ssh/ which can trigger 'Too many authentication failures' (MaxAuthTries).
+        writer.appendLine("IdentitiesOnly yes")
         writer.appendLine("User ubuntu")
         writer.appendLine("IdentityFile $identityFile")
 
@@ -72,6 +75,10 @@ object ClusterConfigWriter {
         writer.appendLine("CLUSTER_NAME=\"$clusterName\"")
         writer.appendLine("DB_NODE_COUNT=${hosts[ServerType.Cassandra]?.size ?: 0}")
         writer.appendLine("APP_NODE_COUNT=${hosts[ServerType.Stress]?.size ?: 0}")
+        hosts[ServerType.Control]?.firstOrNull()?.let { controlHost ->
+            writer.appendLine("CONTROL_NODE_IP=\"${controlHost.publicIp}\"")
+            writer.appendLine("CONTROL_NODE_PRIVATE_IP=\"${controlHost.privateIp}\"")
+        }
 
         // Container registry URL for jib
         hosts[ServerType.Control]?.firstOrNull()?.let { controlHost ->
