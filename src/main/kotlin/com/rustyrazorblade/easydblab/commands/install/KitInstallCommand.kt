@@ -9,6 +9,7 @@ import com.rustyrazorblade.easydblab.services.ExtensionResolver
 import com.rustyrazorblade.easydblab.services.InstallTemplateResolver
 import com.rustyrazorblade.easydblab.services.KitConfig
 import com.rustyrazorblade.easydblab.services.KitType
+import com.rustyrazorblade.easydblab.services.KubeconfigProxyResolver
 import com.rustyrazorblade.easydblab.services.StepExecutionContext
 import com.rustyrazorblade.easydblab.services.TemplateVariables
 import com.rustyrazorblade.easydblab.services.WorkloadStepExecutor
@@ -30,6 +31,7 @@ class KitInstallCommand(
     private val source: InstallTemplateResolver.TemplateSource,
 ) : BaseInstallCommand() {
     private val workloadStepExecutor: WorkloadStepExecutor by inject()
+    private val kubeconfigProxyResolver: KubeconfigProxyResolver = KubeconfigProxyResolver()
 
     internal val argValues: MutableMap<String, String> = mutableMapOf()
     internal var force: Boolean = false
@@ -85,28 +87,31 @@ class KitInstallCommand(
                 clusterState.getControlHost()
                     ?: error("No control node found in cluster state")
             val kitDir = File(context.workingDirectory, instanceName)
-            val variables =
-                TemplateVariables
-                    .from(state = clusterState, kitName = instanceName, storageSize = storageSize)
-                    .toMap() + argValues
+            val workspaceKubeconfig = File(context.workingDirectory, Constants.K3s.LOCAL_KUBECONFIG)
+            kubeconfigProxyResolver.resolve(workspaceKubeconfig).use { resolvedKubeconfig ->
+                val variables =
+                    TemplateVariables
+                        .from(state = clusterState, kitName = instanceName, storageSize = storageSize)
+                        .toMap() + argValues + ("KUBECONFIG" to resolvedKubeconfig.path.absolutePath)
 
-            runCatching {
-                workloadStepExecutor
-                    .execute(
-                        steps = config.install,
-                        phase = Constants.Kit.PHASE_INSTALL,
-                        context =
-                            StepExecutionContext(
-                                kitName = instanceName,
-                                controlHost = controlHost,
-                                clusterState = clusterState,
-                                variables = variables,
-                                kitDir = kitDir,
-                            ),
-                    ).getOrThrow()
-            }.onFailure { e ->
-                kitDir.deleteRecursively()
-                throw e
+                runCatching {
+                    workloadStepExecutor
+                        .execute(
+                            steps = config.install,
+                            phase = Constants.Kit.PHASE_INSTALL,
+                            context =
+                                StepExecutionContext(
+                                    kitName = instanceName,
+                                    controlHost = controlHost,
+                                    clusterState = clusterState,
+                                    variables = variables,
+                                    kitDir = kitDir,
+                                ),
+                        ).getOrThrow()
+                }.onFailure { e ->
+                    kitDir.deleteRecursively()
+                    throw e
+                }
             }
         }
     }
