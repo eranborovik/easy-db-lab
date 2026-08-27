@@ -24,17 +24,17 @@ args:
     variable: REGATTA_VERSION
     description: "Regatta image version tag"
     type: string
-    default: "26.0.0.816"
+    default: "26.0.0.789"
   - flag: --regatta-repo
     variable: REGATTA_IMAGE_REPOSITORY
     description: "Regatta DB container image repository"
     type: string
-    default: "611434859749.dkr.ecr.us-east-1.amazonaws.com/kubernetes/regatta"
+    default: "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/regatta"
   - flag: --operator-image
     variable: REGATTA_OPERATOR_IMAGE
     description: "Regatta Operator container image"
     type: string
-    default: "611434859749.dkr.ecr.us-east-1.amazonaws.com/kubernetes/operator:26.0.0.816"
+    default: "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/operator:26.0.0.789"
   - flag: --replicas
     variable: REPLICAS
     description: "Number of RDB replicas (default: db node count)"
@@ -54,7 +54,7 @@ args:
     variable: SHM_SIZE
     description: "Memory-backed shared memory size"
     type: string
-    default: "20Gi"
+    default: "40Gi"
   - flag: --namespace
     variable: NAMESPACE
     description: "Kubernetes namespace for Regatta cluster and operator"

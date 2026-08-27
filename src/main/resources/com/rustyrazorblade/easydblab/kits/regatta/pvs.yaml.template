@@ -29,7 +29,7 @@ metadata:
   name: pv-repo-__KIT_NAME__-sm-0
 spec:
   capacity:
-    storage: 20Gi
+    storage: 5Gi
   volumeMode: Filesystem
   accessModes:
     - ReadWriteOnce
@@ -52,7 +52,7 @@ metadata:
   name: pv-logs-__KIT_NAME__-sm-0
 spec:
   capacity:
-    storage: 20Gi
+    storage: 5Gi
   volumeMode: Filesystem
   accessModes:
     - ReadWriteOnce
@@ -75,7 +75,7 @@ metadata:
   name: pv-repo-__KIT_NAME__-rdb-0
 spec:
   capacity:
-    storage: 20Gi
+    storage: 5Gi
   volumeMode: Filesystem
   accessModes:
     - ReadWriteOnce
@@ -98,7 +98,7 @@ metadata:
   name: pv-logs-__KIT_NAME__-rdb-0
 spec:
   capacity:
-    storage: 20Gi
+    storage: 5Gi
   volumeMode: Filesystem
   accessModes:
     - ReadWriteOnce

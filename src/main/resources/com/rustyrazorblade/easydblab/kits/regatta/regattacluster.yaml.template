@@ -11,12 +11,8 @@ spec:
     pullPolicy: IfNotPresent
     pullSecrets:
       - ecr-secret
-  security:
-    runAsUser: 1000
-    runAsGroup: 1001
-    fsGroup: 1001
   sequencer:
-    num_threads: 2
+    num_threads: 4
     ram_MB: 600
   gdd:
     num_threads: 1
@@ -27,26 +23,20 @@ spec:
   rdb:
     replicas: __REPLICAS__
     num_threads: 16
-    ram_MB: 32000
-    port: 8850
-    service_port: 6001
+    ram_MB: 20000
+    service:
+      type: LoadBalancer
+      port: 8850
     blockStorage:
-      provisioning: Dynamic
       size: __STORAGE_SIZE__
       storageClassName: local-storage
       selector:
         matchLabels:
           regatta.dev/cluster: __KIT_NAME__-static
-    config:
-      core_enable_mlock_syscall_usage: "0"
   repoStorage:
-    size: 20Gi
-    storageClassName: local-storage
-    accessModes: [ReadWriteOnce]
+    size: 5Gi
   logs:
-    size: 20Gi
-    storageClassName: local-storage
-    accessModes: [ReadWriteOnce]
+    size: 5Gi
   sharedMemorySize: __SHM_SIZE__
   resources:
     sm:
@@ -59,11 +49,8 @@ spec:
     rdb:
       requests:
         cpu: "16"
-        memory: 32000M
+        memory: 20000M
       limits:
-        cpu: "24"
-        memory: 64000M
-  lifecycle:
-    configure: true
-    start: true
+        cpu: "40"
+        memory: 80000M
 
