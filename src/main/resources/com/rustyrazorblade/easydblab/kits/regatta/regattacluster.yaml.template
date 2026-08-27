@@ -11,6 +11,10 @@ spec:
     pullPolicy: IfNotPresent
     pullSecrets:
       - ecr-secret
+  security:
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
   sequencer:
     num_threads: 4
     ram_MB: 600
