@@ -1,0 +1,57 @@
+apiVersion: regatta.dev/v1alpha1
+kind: RegattaCluster
+metadata:
+  name: regatta-sample
+  namespace: regatta
+spec:
+  version: "26.0"
+  image:
+    repository: 611434859749.dkr.ecr.us-east-1.amazonaws.com/kubernetes/regatta
+    tag: "26.0.0.816"
+    pullPolicy: Always
+  security:
+    runAsUser: 1000
+    runAsGroup: 1001
+    fsGroup: 1001
+  sequencer:
+    num_threads: 2
+    ram_MB: 600
+  gdd:
+    num_threads: 1
+    ram_MB: 300
+  dcm:
+    num_threads: 1
+    ram_MB: 350
+  rdb:
+    num_threads: 16
+    ram_MB: 32000
+    port: 8850
+    service_port: 6001
+    replicas: 1
+    service:
+      type: LoadBalancer
+      port: 8850
+    blockStorage:
+      size: 200Gi
+    config:
+      core_enable_mlock_syscall_usage: "0"
+  repoStorage:
+    size: 5Gi
+  logs:
+    size: 5Gi
+  sharedMemorySize: 40Gi
+  resources:
+    sm:
+      requests:
+        cpu: "6"
+        memory: 1250M
+      limits:
+        cpu: "6"
+        memory: 1250M
+    rdb:
+      requests:
+        cpu: "16"
+        memory: 32000M
+      limits:
+        cpu: "24"
+        memory: 64000M

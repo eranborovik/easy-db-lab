@@ -1,0 +1,83 @@
+apiVersion: regatta.dev/v1alpha1
+kind: RegattaCluster
+metadata:
+  name: regatta-prod
+  namespace: regatta
+spec:
+  version: "26.0"
+  image:
+    repository: registry.example.com/regatta
+    digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+    pullPolicy: IfNotPresent
+  sm:
+    num_threads: 1
+    ram_MB: 4096
+    port: 8840
+    service_port: 5000
+    config: {}
+  sna:
+    port: 8841
+    service_port: 5001
+    config: {}
+  sequencer:
+    num_threads: 1
+    ram_MB: 4096
+    port: 8842
+    service_port: 5002
+    config: {}
+  gdd:
+    num_threads: 1
+    ram_MB: 4096
+    port: 8843
+    service_port: 5003
+    config: {}
+  dcm:
+    num_threads: 1
+    ram_MB: 4096
+    port: 8844
+    service_port: 5004
+    config: {}
+  rdb:
+    num_threads: 4
+    ram_MB: 32768
+    port: 8850
+    service_port: 6001
+    config: {}
+    replicas: 3
+    blockStorage:
+      size: 500Gi
+      storageClassName: storage-block
+  repoStorage:
+    size: 50Gi
+    storageClassName: storage-filesystem
+    accessModes: [ReadWriteOnce]
+  logs:
+    size: 100Gi
+    storageClassName: storage-filesystem
+    accessModes: [ReadWriteOnce]
+  sharedMemorySize: 64Gi
+  lifecycle:
+    configure: true
+    start: true
+  security:
+    profile: baseline
+    runAsUser: 999
+    runAsGroup: 999
+    fsGroup: 999
+    seccompProfile: RuntimeDefault
+    allowPrivilegeEscalation: false
+  resources:
+    sm:
+      requests:
+        cpu: "4"
+        memory: 16384M
+      limits:
+        cpu: "4"
+        memory: 16384M
+    rdb:
+      requests:
+        cpu: "4"
+        memory: 32768M
+      limits:
+        cpu: "8"
+        memory: 65536M

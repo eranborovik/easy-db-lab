@@ -1,0 +1,766 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: regattaclusters.regatta.dev
+spec:
+  group: regatta.dev
+  scope: Namespaced
+  names:
+    plural: regattaclusters
+    singular: regattacluster
+    kind: RegattaCluster
+    shortNames:
+      - regatta
+      - rgc
+    categories:
+      - all
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+        - name: Kubernetes
+          type: string
+          jsonPath: .status.conditions[?(@.type=="KubernetesReady")].status
+        - name: RDBs
+          type: integer
+          jsonPath: .spec.rdb.replicas
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: RegattaCluster declares a fixed-size Regatta deployment.
+          required:
+            - spec
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              description: Desired Regatta cluster state.
+              required:
+                - version
+                - image
+                - rdb
+                - repoStorage
+                - logs
+                - sharedMemorySize
+              x-kubernetes-validations:
+                - rule: "!(has(self.lifecycle) && has(self.lifecycle.configure) && self.lifecycle.configure == false) || (has(self.lifecycle.start) && self.lifecycle.start == false)"
+                  message: "spec.lifecycle.configure=false requires spec.lifecycle.start=false"
+                - rule: "!(has(self.lifecycle) && has(self.lifecycle.configure) && self.lifecycle.configure == false) || (has(oldSelf.lifecycle) && has(oldSelf.lifecycle.configure) && oldSelf.lifecycle.configure == false)"
+                  message: "spec.lifecycle.configure=false is allowed only when creating a new cluster"
+              properties:
+                version:
+                  type: string
+                  description: Regatta release version.
+                  minLength: 1
+                  pattern: "^[0-9]+(\\.[0-9]+)*$"
+                  x-kubernetes-validations:
+                    - rule: "self == oldSelf"
+                      message: "spec.version is immutable"
+                image:
+                  type: object
+                  description: Regatta image settings.
+                  required:
+                    - repository
+                  x-kubernetes-validations:
+                    - rule: "has(self.tag) || has(self.digest)"
+                      message: "image tag or digest is required"
+                  properties:
+                    repository:
+                      type: string
+                      description: Container image repository.
+                      minLength: 1
+                      pattern: "^.+$"
+                    tag:
+                      type: string
+                      description: Image tag. Prefer digest in production.
+                      pattern: "^.+$"
+                    digest:
+                      type: string
+                      description: Image digest, for example sha256:...
+                      pattern: "^[A-Za-z0-9_+.-]+:[A-Fa-f0-9]+$"
+                    pullPolicy:
+                      type: string
+                      description: Kubernetes image pull policy.
+                      enum: [Always, IfNotPresent, Never]
+                      default: IfNotPresent
+                    pullSecrets:
+                      type: array
+                      description: Image pull secret names.
+                      items:
+                        type: string
+                rdb:
+                  type: object
+                  description: RDB topology and storage settings.
+                  required:
+                    - replicas
+                    - blockStorage
+                  x-kubernetes-validations:
+                    - rule: "has(self.port) == has(oldSelf.port) && (!has(self.port) || self.port == oldSelf.port)"
+                      message: "spec.rdb.port is immutable"
+                    - rule: "has(self.num_threads) == has(oldSelf.num_threads) && (!has(self.num_threads) || self.num_threads == oldSelf.num_threads)"
+                      message: "spec.rdb.num_threads is immutable"
+                    - rule: "has(self.ram_MB) == has(oldSelf.ram_MB) && (!has(self.ram_MB) || self.ram_MB == oldSelf.ram_MB)"
+                      message: "spec.rdb.ram_MB is immutable"
+                  properties:
+                    num_threads:
+                      type: integer
+                      nullable: true
+                      description: Optional number of threads.
+                      minimum: 0
+                    ram_MB:
+                      type: integer
+                      nullable: true
+                      description: Optional memory size in megabytes.
+                      minimum: 0
+                    port:
+                      type: integer
+                      description: RDB port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 8850
+                    service_port:
+                      type: integer
+                      description: RDB service port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 6001
+                    config:
+                      type: object
+                      description: RDB module key/value configuration.
+                      additionalProperties:
+                        type: string
+                      default: {}
+                    service:
+                      type: object
+                      description: Aggregate RDB Kubernetes Service settings.
+                      default: {}
+                      properties:
+                        type:
+                          type: string
+                          description: Aggregate RDB Kubernetes Service type.
+                          enum: [ClusterIP, LoadBalancer]
+                          default: ClusterIP
+                        port:
+                          type: integer
+                          description: Exposed per-RDB Kubernetes Service port.
+                          minimum: 1
+                          maximum: 65535
+                          default: 8850
+                    replicas:
+                      type: integer
+                      description: Number of RDB instances.
+                      minimum: 1
+                      x-kubernetes-validations:
+                        - rule: "self == oldSelf"
+                          message: "spec.rdb.replicas is immutable"
+                    blockStorage:
+                      type: object
+                      description: Raw block storage for each RDB replica.
+                      required:
+                        - size
+                      properties:
+                        size:
+                          type: string
+                          description: Requested raw block PVC size.
+                          pattern: "^[0-9]+(\\.[0-9]+)?([EPTGMK]i?|[munp])?$"
+                        storageClassName:
+                          type: string
+                          description: StorageClass for RDB raw block PVCs.
+                          pattern: "^$|^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+                        provisioning:
+                          type: string
+                          description: Dynamic or static storage provisioning mode.
+                          enum: [Dynamic, Static]
+                          default: Dynamic
+                        selector:
+                          type: object
+                          description: PVC selector for static provisioning.
+                          x-kubernetes-preserve-unknown-fields: true
+                sm:
+                  type: object
+                  description: System Manager module settings.
+                  default: {}
+                  x-kubernetes-validations:
+                    - rule: "has(self.port) == has(oldSelf.port) && (!has(self.port) || self.port == oldSelf.port)"
+                      message: "spec.sm.port is immutable"
+                    - rule: "has(self.num_threads) == has(oldSelf.num_threads) && (!has(self.num_threads) || self.num_threads == oldSelf.num_threads)"
+                      message: "spec.sm.num_threads is immutable"
+                    - rule: "has(self.ram_MB) == has(oldSelf.ram_MB) && (!has(self.ram_MB) || self.ram_MB == oldSelf.ram_MB)"
+                      message: "spec.sm.ram_MB is immutable"
+                  properties:
+                    num_threads:
+                      type: integer
+                      nullable: true
+                      description: Optional number of threads.
+                      minimum: 0
+                    ram_MB:
+                      type: integer
+                      nullable: true
+                      description: Optional memory size in megabytes.
+                      minimum: 0
+                    port:
+                      type: integer
+                      description: SM port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 8840
+                    service_port:
+                      type: integer
+                      description: SM service port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 5000
+                    config:
+                      type: object
+                      description: SM module key/value configuration.
+                      additionalProperties:
+                        type: string
+                      default: {}
+                sna:
+                  type: object
+                  description: SNA module settings.
+                  default: {}
+                  x-kubernetes-validations:
+                    - rule: "has(self.port) == has(oldSelf.port) && (!has(self.port) || self.port == oldSelf.port)"
+                      message: "spec.sna.port is immutable"
+                    - rule: "has(self.num_threads) == has(oldSelf.num_threads) && (!has(self.num_threads) || self.num_threads == oldSelf.num_threads)"
+                      message: "spec.sna.num_threads is immutable"
+                    - rule: "has(self.ram_MB) == has(oldSelf.ram_MB) && (!has(self.ram_MB) || self.ram_MB == oldSelf.ram_MB)"
+                      message: "spec.sna.ram_MB is immutable"
+                  properties:
+                    num_threads:
+                      type: integer
+                      nullable: true
+                      description: Optional number of threads.
+                      minimum: 0
+                    ram_MB:
+                      type: integer
+                      nullable: true
+                      description: Optional memory size in megabytes.
+                      minimum: 0
+                    port:
+                      type: integer
+                      description: SNA port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 8841
+                    service_port:
+                      type: integer
+                      description: SNA service port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 5001
+                    config:
+                      type: object
+                      description: SNA module key/value configuration.
+                      additionalProperties:
+                        type: string
+                      default: {}
+                sequencer:
+                  type: object
+                  description: Sequencer module settings.
+                  default: {}
+                  x-kubernetes-validations:
+                    - rule: "has(self.port) == has(oldSelf.port) && (!has(self.port) || self.port == oldSelf.port)"
+                      message: "spec.sequencer.port is immutable"
+                    - rule: "has(self.num_threads) == has(oldSelf.num_threads) && (!has(self.num_threads) || self.num_threads == oldSelf.num_threads)"
+                      message: "spec.sequencer.num_threads is immutable"
+                    - rule: "has(self.ram_MB) == has(oldSelf.ram_MB) && (!has(self.ram_MB) || self.ram_MB == oldSelf.ram_MB)"
+                      message: "spec.sequencer.ram_MB is immutable"
+                  properties:
+                    num_threads:
+                      type: integer
+                      nullable: true
+                      description: Optional number of threads.
+                      minimum: 0
+                    ram_MB:
+                      type: integer
+                      nullable: true
+                      description: Optional memory size in megabytes.
+                      minimum: 0
+                    port:
+                      type: integer
+                      description: Sequencer port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 8842
+                    service_port:
+                      type: integer
+                      description: Sequencer service port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 5002
+                    config:
+                      type: object
+                      description: Sequencer module key/value configuration.
+                      additionalProperties:
+                        type: string
+                      default: {}
+                gdd:
+                  type: object
+                  description: GDD module settings.
+                  default: {}
+                  x-kubernetes-validations:
+                    - rule: "has(self.port) == has(oldSelf.port) && (!has(self.port) || self.port == oldSelf.port)"
+                      message: "spec.gdd.port is immutable"
+                    - rule: "has(self.num_threads) == has(oldSelf.num_threads) && (!has(self.num_threads) || self.num_threads == oldSelf.num_threads)"
+                      message: "spec.gdd.num_threads is immutable"
+                    - rule: "has(self.ram_MB) == has(oldSelf.ram_MB) && (!has(self.ram_MB) || self.ram_MB == oldSelf.ram_MB)"
+                      message: "spec.gdd.ram_MB is immutable"
+                  properties:
+                    num_threads:
+                      type: integer
+                      nullable: true
+                      description: Optional number of threads.
+                      minimum: 0
+                    ram_MB:
+                      type: integer
+                      nullable: true
+                      description: Optional memory size in megabytes.
+                      minimum: 0
+                    port:
+                      type: integer
+                      description: GDD port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 8843
+                    service_port:
+                      type: integer
+                      description: GDD service port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 5003
+                    config:
+                      type: object
+                      description: GDD module key/value configuration.
+                      additionalProperties:
+                        type: string
+                      default: {}
+                dcm:
+                  type: object
+                  description: DCM module settings.
+                  default: {}
+                  x-kubernetes-validations:
+                    - rule: "has(self.port) == has(oldSelf.port) && (!has(self.port) || self.port == oldSelf.port)"
+                      message: "spec.dcm.port is immutable"
+                    - rule: "has(self.num_threads) == has(oldSelf.num_threads) && (!has(self.num_threads) || self.num_threads == oldSelf.num_threads)"
+                      message: "spec.dcm.num_threads is immutable"
+                    - rule: "has(self.ram_MB) == has(oldSelf.ram_MB) && (!has(self.ram_MB) || self.ram_MB == oldSelf.ram_MB)"
+                      message: "spec.dcm.ram_MB is immutable"
+                  properties:
+                    num_threads:
+                      type: integer
+                      nullable: true
+                      description: Optional number of threads.
+                      minimum: 0
+                    ram_MB:
+                      type: integer
+                      nullable: true
+                      description: Optional memory size in megabytes.
+                      minimum: 0
+                    port:
+                      type: integer
+                      description: DCM port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 8844
+                    service_port:
+                      type: integer
+                      description: DCM service port.
+                      minimum: 1
+                      maximum: 65535
+                      default: 5004
+                    config:
+                      type: object
+                      description: DCM module key/value configuration.
+                      additionalProperties:
+                        type: string
+                      default: {}
+                repoStorage:
+                  type: object
+                  description: Filesystem PVC settings for Regatta runtime repo paths.
+                  required:
+                    - size
+                  properties:
+                    size:
+                      type: string
+                      description: Requested filesystem PVC size.
+                      pattern: "^[0-9]+(\\.[0-9]+)?([EPTGMK]i?|[munp])?$"
+                    storageClassName:
+                      type: string
+                      description: StorageClass name.
+                      pattern: "^$|^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+                    accessModes:
+                      type: array
+                      description: PVC access modes.
+                      items:
+                        type: string
+                      default: [ReadWriteOnce]
+                logs:
+                  type: object
+                  description: Filesystem PVC settings for /var/log/regatta.
+                  required:
+                    - size
+                  properties:
+                    size:
+                      type: string
+                      description: Requested filesystem PVC size.
+                      pattern: "^[0-9]+(\\.[0-9]+)?([EPTGMK]i?|[munp])?$"
+                    storageClassName:
+                      type: string
+                      description: StorageClass name.
+                      pattern: "^$|^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+                    accessModes:
+                      type: array
+                      description: PVC access modes.
+                      items:
+                        type: string
+                      default: [ReadWriteOnce]
+                sharedMemorySize:
+                  type: string
+                  description: Memory-backed shared memory size.
+                  pattern: "^[0-9]+(\\.[0-9]+)?([EPTGMK]i?|[munp])?$"
+                lifecycle:
+                  type: object
+                  description: Regatta configure/start intent.
+                  properties:
+                    configure:
+                      type: boolean
+                      description: Configure Regatta through SM after Kubernetes infrastructure is ready.
+                      default: true
+                    start:
+                      type: boolean
+                      description: Start Regatta after configuration. False means desired stopped state.
+                      default: true
+                security:
+                  type: object
+                  description: Pod security profile and Linux user/group IDs.
+                  properties:
+                    profile:
+                      type: string
+                      description: Pod security profile target.
+                      enum: [baseline, restricted]
+                      default: baseline
+                    runAsUser:
+                      type: integer
+                      description: Linux UID.
+                      minimum: 1
+                      default: 1000
+                    runAsGroup:
+                      type: integer
+                      description: Linux GID.
+                      minimum: 1
+                      default: 1000
+                    fsGroup:
+                      type: integer
+                      description: Filesystem group applied to mounted PVCs.
+                      minimum: 1
+                      default: 1000
+                    seccompProfile:
+                      type: string
+                      description: Seccomp profile type.
+                      enum: [RuntimeDefault, Unconfined]
+                      default: RuntimeDefault
+                    allowPrivilegeEscalation:
+                      type: boolean
+                      description: Whether Regatta containers may gain additional privileges.
+                      default: false
+                resources:
+                  type: object
+                  description: Kubernetes resource requests and limits.
+                  properties:
+                    sm:
+                      type: object
+                      description: Kubernetes resource requests and limits for the combined SM and singleton modules.
+                      required:
+                        - requests
+                        - limits
+                      properties:
+                        requests:
+                          type: object
+                          description: Kubernetes resource requests for the combined SM and singleton modules.
+                          required:
+                            - cpu
+                            - memory
+                          properties:
+                            cpu:
+                              type: string
+                              description: Requested CPU quantity.
+                              pattern: "^([0-9]+(\\.[0-9]+)?m?|[0-9]+m)$"
+                            memory:
+                              type: string
+                              description: Requested memory quantity.
+                              pattern: "^[0-9]+(\\.[0-9]+)?([EPTGMK]i?|[munp])?$"
+                        limits:
+                          type: object
+                          description: Kubernetes resource limits for the combined SM and singleton modules.
+                          required:
+                            - cpu
+                            - memory
+                          properties:
+                            cpu:
+                              type: string
+                              description: CPU limit quantity.
+                              pattern: "^([0-9]+(\\.[0-9]+)?m?|[0-9]+m)$"
+                            memory:
+                              type: string
+                              description: Memory limit quantity.
+                              pattern: "^[0-9]+(\\.[0-9]+)?([EPTGMK]i?|[munp])?$"
+                    rdb:
+                      type: object
+                      description: Kubernetes resource requests and limits for RDB.
+                      required:
+                        - requests
+                        - limits
+                      properties:
+                        requests:
+                          type: object
+                          description: Kubernetes resource requests for RDB.
+                          required:
+                            - cpu
+                            - memory
+                          properties:
+                            cpu:
+                              type: string
+                              description: Requested CPU quantity.
+                              pattern: "^([0-9]+(\\.[0-9]+)?m?|[0-9]+m)$"
+                            memory:
+                              type: string
+                              description: Requested memory quantity.
+                              pattern: "^[0-9]+(\\.[0-9]+)?([EPTGMK]i?|[munp])?$"
+                            hugepages-2Mi:
+                              type: string
+                              description: Requested Hugepages 2Mi quantity.
+                              pattern: "^[0-9]+(\\.[0-9]+)?([EPTGMK]i?|[munp])?$"
+                        limits:
+                          type: object
+                          description: Kubernetes resource limits for RDB.
+                          required:
+                            - cpu
+                            - memory
+                          properties:
+                            cpu:
+                              type: string
+                              description: CPU limit quantity.
+                              pattern: "^([0-9]+(\\.[0-9]+)?m?|[0-9]+m)$"
+                            memory:
+                              type: string
+                              description: Memory limit quantity.
+                              pattern: "^[0-9]+(\\.[0-9]+)?([EPTGMK]i?|[munp])?$"
+                            hugepages-2Mi:
+                              type: string
+                              description: Hugepages 2Mi limit quantity.
+                              pattern: "^[0-9]+(\\.[0-9]+)?([EPTGMK]i?|[munp])?$"
+            status:
+              type: object
+              description: Observed Regatta and Kubernetes state.
+              properties:
+                observedGeneration:
+                  type: integer
+                  format: int64
+                  description: Last metadata.generation reconciled by the operator.
+                endpoints:
+                  type: object
+                  description: Observed Kubernetes Service endpoints advertised to Regatta.
+                  required: [sm, rdbs]
+                  properties:
+                    sm:
+                      type: object
+                      required: [serviceName, dnsName, clusterIP, ports]
+                      properties:
+                        serviceName: {type: string}
+                        dnsName: {type: string}
+                        clusterIP: {type: string, nullable: true}
+                        ports:
+                          type: object
+                          additionalProperties:
+                            type: object
+                            required: [port, service_port]
+                            properties:
+                              port: {type: integer, minimum: 1, maximum: 65535}
+                              service_port: {type: integer, minimum: 1, maximum: 65535}
+                    rdbs:
+                      type: array
+                      x-kubernetes-list-type: map
+                      x-kubernetes-list-map-keys: [ordinal]
+                      items:
+                        type: object
+                        required: [ordinal, serviceName, dnsName, clusterIP, ports]
+                        properties:
+                          ordinal: {type: integer}
+                          serviceName: {type: string}
+                          dnsName: {type: string}
+                          clusterIP: {type: string, nullable: true}
+                          ports:
+                            type: object
+                            additionalProperties:
+                              type: object
+                              required: [port, service_port]
+                              properties:
+                                port: {type: integer, minimum: 1, maximum: 65535}
+                                service_port: {type: integer, minimum: 1, maximum: 65535}
+                rdb:
+                  type: object
+                  required: [desiredReplicas, readyPods, configuredReplicas, activeReplicas]
+                  properties:
+                    desiredReplicas: {type: integer, minimum: 1}
+                    readyPods: {type: integer, minimum: 0}
+                    configuredReplicas: {type: integer, minimum: 0}
+                    activeReplicas: {type: integer, minimum: 0}
+                modules:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    required: [total, active, down]
+                    properties:
+                      total: {type: integer, minimum: 0}
+                      active: {type: integer, minimum: 0}
+                      down: {type: integer, minimum: 0}
+                devices:
+                  type: object
+                  required: [status, healthy, failed, items]
+                  properties:
+                    status:
+                      type: string
+                      enum: [Healthy, Degraded, Unknown]
+                    healthy: {type: boolean, nullable: true}
+                    failed:
+                      type: array
+                      items: {type: string}
+                    items:
+                      type: array
+                      x-kubernetes-list-type: map
+                      x-kubernetes-list-map-keys: [name]
+                      items:
+                        type: object
+                        required: [name, state]
+                        properties:
+                          name: {type: string}
+                          id: {type: string, nullable: true}
+                          state: {type: string}
+                          path: {type: string, nullable: true}
+                          node: {type: string, nullable: true}
+                          module: {type: string, nullable: true}
+                regatta:
+                  type: object
+                  description: Observed Regatta domain state from SM.
+                  required: [systemState, healthy, desiredState, actions, modules, devices]
+                  properties:
+                    systemState: {type: string}
+                    healthy: {type: boolean}
+                    desiredState:
+                      type: string
+                      enum: [running, stopped]
+                    actions:
+                      type: array
+                      items: {type: string}
+                    modules:
+                      type: object
+                      required: [items, roles, states, active, down]
+                      properties:
+                        items:
+                          type: array
+                          x-kubernetes-list-type: map
+                          x-kubernetes-list-map-keys: [name]
+                          items:
+                            type: object
+                            required: [name, state, role]
+                            properties:
+                              name: {type: string}
+                              id: {type: string, nullable: true}
+                              state: {type: string}
+                              role: {type: string}
+                              node: {type: string, nullable: true}
+                              endpoint: {type: string, nullable: true}
+                              message: {type: string, nullable: true}
+                        roles:
+                          type: object
+                          additionalProperties:
+                            type: object
+                            required: [total, active, down, states]
+                            properties:
+                              total: {type: integer}
+                              active: {type: integer}
+                              down: {type: integer}
+                              states:
+                                type: array
+                                items: {type: string}
+                        states:
+                          type: object
+                          additionalProperties: {type: string}
+                        active:
+                          type: array
+                          items: {type: string}
+                        down:
+                          type: array
+                          items: {type: string}
+                    devices:
+                      type: object
+                      required: [status, healthy, failed, items]
+                      properties:
+                        status: {type: string, enum: [Healthy, Degraded]}
+                        healthy: {type: boolean}
+                        failed:
+                          type: array
+                          items: {type: string}
+                        items:
+                          type: array
+                          x-kubernetes-list-type: map
+                          x-kubernetes-list-map-keys: [name]
+                          items:
+                            type: object
+                            required: [name, state]
+                            properties:
+                              name: {type: string}
+                              id: {type: string, nullable: true}
+                              state: {type: string}
+                              path: {type: string, nullable: true}
+                              node: {type: string, nullable: true}
+                              module: {type: string, nullable: true}
+                conditions:
+                  type: array
+                  description: status conditions.
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys:
+                    - type
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                        description: Condition type.
+                      status:
+                        type: string
+                        description: Condition status.
+                        enum: ["True", "False", Unknown]
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                        description: Generation observed when setting this condition.
+                      reason:
+                        type: string
+                        description: Programmatic reason for the condition state.
+                      message:
+                        type: string
+                        description: Human-readable condition details.
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                        description: Last time the condition status changed.

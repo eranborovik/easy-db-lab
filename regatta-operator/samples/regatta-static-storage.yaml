@@ -1,0 +1,26 @@
+apiVersion: regatta.dev/v1alpha1
+kind: RegattaCluster
+metadata:
+  name: regatta-static
+  namespace: regatta
+spec:
+  version: "26.0"
+  image:
+    repository: 611434859749.dkr.ecr.us-east-1.amazonaws.com/kubernetes/regatta
+    tag: "26.0.0.816"
+  rdb:
+    replicas: 3
+    blockStorage:
+      provisioning: Static
+      size: 1Ti
+      storageClassName: local-block
+      selector:
+        matchLabels:
+          regatta.dev/cluster: regatta-static
+  repoStorage:
+    size: 50Gi
+    storageClassName: local-filesystem
+  logs:
+    size: 100Gi
+    storageClassName: local-filesystem
+  sharedMemorySize: 64Gi

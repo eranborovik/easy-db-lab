@@ -49,7 +49,7 @@ args:
     variable: RDB_DEVICE
     description: "Path to raw block or loop device on DB node for RDB storage"
     type: string
-    default: "/dev/loop0"
+    default: "/dev/nvme4n1"
   - flag: --shm-size
     variable: SHM_SIZE
     description: "Memory-backed shared memory size"

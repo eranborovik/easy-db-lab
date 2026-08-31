@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: reg-sysbench
+  labels:
+    app: sysbench
+spec:
+  # Prevents Kubernetes from restarting the container if tests fail
+  restartPolicy: Never
+  imagePullSecrets:
+    - name: ecr-secret
+  containers:
+    - name: sysbench
+      image: 694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/sysbench
+      resources:
+        requests:
+          cpu: "2"
+          memory: 1000M
+        limits:
+          cpu: "2"
+          memory: 1000M
+          ephemeral-storage: "1Gi"
+      env:
+        - name: TEST_CMD
+          value: ""
+        - name: SM_URL
+          value: "regatta-sm.regatta.svc.cluster.local:8840"
+        - name: REGATTA_URL
+          value: "regatta-rdb.regatta.svc.cluster.local"
+        - name: REGATTA_PORT
+          value: "8850"
+        - name: TIMEOUT
+          value: "3600"
+
+      # Optional: Override ENTRYPOINT if necessary (e.g., ["/bin/sh", "-c"])
+      command: ["/bin/sh", "-c", "sleep 999d"]
+
+      # Overrides Docker's CMD: Replace with your actual test command/flags
+      # args:
+      #   - "npm"
+      #   - "test"
+      #   - "--"
+      #   - "--target-service=http://your-service-name.default.svc.cluster.local:8080"

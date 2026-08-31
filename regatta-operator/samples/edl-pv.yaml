@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-rdb-block-regatta-rdb-0
+  labels:
+    regatta.dev/cluster: regatta-static
+spec:
+  capacity:
+    storage: 500Gi # This should match the total size of the device, and also the blockStorage.size in the regattacluster.yaml
+  volumeMode: Block
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /dev/loop3 # Replace with the actual device to use like /dev/nvme1n1
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: easydblab.com/node-ordinal
+              operator: In
+              values:
+                - "0"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-repo-regatta-sm-0
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /mnt/db1/regatta/repo-sm-0
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: easydblab.com/node-ordinal
+              operator: In
+              values:
+                - "0"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-logs-regatta-sm-0
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /mnt/db1/regatta/logs-sm-0
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: easydblab.com/node-ordinal
+              operator: In
+              values:
+                - "0"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-repo-regatta-rdb-0
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /mnt/db1/regatta/repo-rdb-0
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: easydblab.com/node-ordinal
+              operator: In
+              values:
+                - "0"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-logs-regatta-rdb-0
+spec:
+  capacity:
+    storage: 20Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /mnt/db1/regatta/logs-rdb-0
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: easydblab.com/node-ordinal
+              operator: In
+              values:
+                - "0"

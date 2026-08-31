@@ -1,0 +1,198 @@
+#!/bin/bash
+
+# ==============================================================================
+# Sysbench Automation for Regatta DB - Complete Suite
+# ==============================================================================
+
+# Ensure the URL is passed as a command-line argument
+if [ -z "$1" ]; then
+	echo "Error: Missing Regatta URL."
+	echo "Usage: $0 <REGATTA_URL>"
+	echo "Example: $0 34.74.43.42:8845"
+	exit 1
+fi
+
+# Node configuration passed from outside
+REGATTA_URL="$1"
+REGATTA_USER="admin"
+REGATTA_PASS="RegattaDefault1234!"
+
+# Environment Setup
+# export LD_LIBRARY_PATH="$(pwd):$LD_LIBRARY_PATH"
+
+# Ensure binaries exist
+if ! command -v sysbench; then
+	echo "Error: sysbench binary not found in current directory."
+	exit 1
+fi
+
+# Create a nested directory structure: sysbench_results/<URL>/run_<TIMESTAMP>
+SANITIZED_URL=$(echo "$REGATTA_URL" | tr ':' '_')
+START_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+BASE_RESULTS_DIR="sysbench_results"
+URL_DIR="${BASE_RESULTS_DIR}/${SANITIZED_URL}"
+LOG_DIR="${URL_DIR}/run_${START_TIMESTAMP}"
+
+# Create the directories (mkdir -p creates parent directories automatically if they don't exist)
+mkdir -p "$LOG_DIR"
+
+# List of Lua tests to run in Phase 1 & 2
+TEST_FILES=(
+	"bulk_insert.lua" "oltp_delete.lua" "oltp_insert.lua"
+	"oltp_point_select.lua" "oltp_read_only.lua" "oltp_read_write.lua"
+	"oltp_update_index.lua" "oltp_update_non_index.lua"
+	"oltp_write_only.lua" "select_random_points.lua" "select_random_ranges.lua"
+)
+
+# Test configurations (Threads, Tables, Table Size, PS Mode)
+CONFIGS=(
+	"16 10 10000 disable"
+	"32 20 50000 auto"
+	"64 10 100000 disable"
+)
+
+# Base Sysbench command wrapper
+run_sysbench() {
+	local test_file=$1
+	local command=$2
+	local threads=$3
+	local tables=$4
+	local table_size=$5
+	local ps_mode=$6
+	local time_limit=$7
+	local log_file=$8
+	local extra_args=$9
+
+	# bulk_insert has its own schema and does not accept standard OLTP flags
+	local oltp_flags=""
+	if [[ "$test_file" != bulk_insert.lua ]]; then
+		oltp_flags="--auto-inc=off --tables=$tables --table-size=$table_size"
+	fi
+
+	# Using 'timeout' to hard-kill if it hangs
+	local hard_timeout=$((time_limit + 60))
+
+	echo "Running: $test_file | Cmd: $command | Threads: $threads | Time: $time_limit | Extras: $extra_args" | tee -a "$log_file"
+
+	timeout $hard_timeout sysbench \
+		--db-driver=regatta \
+		--regatta-url="$REGATTA_URL" \
+		--regatta-user="$REGATTA_USER" \
+		--regatta-password="$REGATTA_PASS" \
+		--db-ps-mode="$ps_mode" \
+		$oltp_flags \
+		--threads="$threads" \
+		--report-interval=10 \
+		--time="$time_limit" \
+		$extra_args \
+		"$test_file" "$command" >>"$log_file" 2>&1
+
+	local status=$?
+	if [ $status -ne 0 ]; then
+		echo "WARNING: Command '$command' failed or timed out with exit code $status" | tee -a "$log_file"
+		return 1
+	fi
+	return 0
+}
+
+echo "Starting Sysbench Automation for Node: $REGATTA_URL"
+echo "Logs will be saved to: $LOG_DIR"
+
+# ==============================================================================
+# PHASE 0: Parameter Smoke Tests (60-second runs to validate all flags)
+# ==============================================================================
+echo "========================================================"
+echo "PHASE 0: Running Parameter Smoke Tests on oltp_read_write.lua"
+
+SMOKE_TEST="oltp_read_write.lua"
+SMOKE_THREADS=16
+SMOKE_TABLES=4
+SMOKE_SIZE=1000
+SMOKE_TIME=60 # 1 minute per test
+
+# Properly formatted standard bash array strings
+declare -A PARAM_GROUPS
+PARAM_GROUPS["General"]="--events=50000 --warmup-time=5 --forced-shutdown=10 --thread-stack-size=128K --thread-init-timeout=60 --rate=100"
+
+# Added --regatta-ignore-errors=all to prevent integrity constraint crashes
+PARAM_GROUPS["PRNG"]="--rand-type=zipfian --rand-seed=42 --rand-zipfian-exp=0.5 --rand-pareto-h=0.3 --regatta-ignore-errors=all"
+
+# Removed --report-checkpoints to avoid the sysbench fatal thread termination bug
+PARAM_GROUPS["Logging"]="--debug=on --validate=on --verbosity=5 --percentile=99 --histogram=on --db-debug=on"
+
+PARAM_GROUPS["Regatta_Routing"]="--regatta-timeout=15000 --regatta-index-rdb-modules=1 --regatta-index-devices-per-module=2 --regatta-index-segments-per-device=4 --regatta-shard-inserts-by-pk=off --regatta-ignore-errors=all"
+
+# Ensure the analyzer directory exists before trying to run it
+mkdir -p "${LOG_DIR}/analyzer"
+# Generate a random width between 0 and 3
+RANDOM_WIDTH=$((RANDOM % 4))
+PARAM_GROUPS["Regatta_Analyzer"]="--regatta-statement-analyzer=on --regatta-statement-analyzer-dir=${LOG_DIR}/analyzer --regatta-statement-analyzer-depth=operator --regatta-statement-analyzer-width=${RANDOM_WIDTH} --regatta-statement-analyzer-pretty=on"
+
+for group_name in "${!PARAM_GROUPS[@]}"; do
+	echo "Testing Parameter Group: $group_name"
+	EXTRA_FLAGS="${PARAM_GROUPS[$group_name]}"
+	LOG_PREFIX="${LOG_DIR}/SMOKE_${group_name}"
+
+	run_sysbench "$SMOKE_TEST" "cleanup" "$SMOKE_THREADS" "$SMOKE_TABLES" "$SMOKE_SIZE" "disable" 60 "${LOG_PREFIX}_cleanup.log" ""
+
+	if run_sysbench "$SMOKE_TEST" "prepare" "$SMOKE_THREADS" "$SMOKE_TABLES" "$SMOKE_SIZE" "disable" 120 "${LOG_PREFIX}_prepare.log" ""; then
+		run_sysbench "$SMOKE_TEST" "run" "$SMOKE_THREADS" "$SMOKE_TABLES" "$SMOKE_SIZE" "disable" "$SMOKE_TIME" "${LOG_PREFIX}_run.log" "$EXTRA_FLAGS"
+	else
+		echo "Prepare failed for Phase 0: $group_name, skipping run."
+	fi
+done
+
+# ==============================================================================
+# PHASE 1: Varied Configurations (15 min runs)
+# ==============================================================================
+echo "========================================================"
+echo "PHASE 1: Starting Varied Configurations (15 Min Runs)"
+
+for config in "${CONFIGS[@]}"; do
+	read -r THREADS TABLES TABLE_SIZE PS_MODE <<<"$config"
+
+	for test in "${TEST_FILES[@]}"; do
+		if [ ! -f "$test" ]; then continue; fi
+
+		TEST_NAME=$(basename "$test" .lua)
+		RUN_TS=$(date +"%H%M%S")
+		LOG_PREFIX="${LOG_DIR}/${TEST_NAME}_T${THREADS}_S${TABLE_SIZE}_${RUN_TS}"
+
+		echo "--------------------------------------------------------"
+		echo "Starting flow: $TEST_NAME | $THREADS threads | $TABLES tables"
+
+		# Sequentially run all three commands regardless of previous failures
+		run_sysbench "$test" "cleanup" "$THREADS" "$TABLES" "$TABLE_SIZE" "$PS_MODE" 300 "${LOG_PREFIX}_cleanup.log" "--events=0"
+		run_sysbench "$test" "prepare" "$THREADS" "$TABLES" "$TABLE_SIZE" "$PS_MODE" 900 "${LOG_PREFIX}_prepare.log" "--events=0"
+		run_sysbench "$test" "run" "$THREADS" "$TABLES" "$TABLE_SIZE" "$PS_MODE" 900 "${LOG_PREFIX}_run.log" "--events=0"
+	done
+done
+
+# ==============================================================================
+# PHASE 2: 1-Hour Endurance Run
+# ==============================================================================
+echo "========================================================"
+echo "PHASE 2: Starting 1-Hour Endurance Runs for all flows..."
+
+ENDURANCE_THREADS=32
+ENDURANCE_TABLES=10
+ENDURANCE_SIZE=100000
+ENDURANCE_PS="disable"
+ENDURANCE_TIME=3600 # 1 hour
+
+for test in "${TEST_FILES[@]}"; do
+	if [ ! -f "$test" ]; then continue; fi
+
+	TEST_NAME=$(basename "$test" .lua)
+	RUN_TS=$(date +"%H%M%S")
+	LOG_PREFIX="${LOG_DIR}/ENDURANCE_${TEST_NAME}_${RUN_TS}"
+
+	echo "Starting 1-hour run for $TEST_NAME..."
+
+	run_sysbench "$test" "cleanup" "$ENDURANCE_THREADS" "$ENDURANCE_TABLES" "$ENDURANCE_SIZE" "$ENDURANCE_PS" 300 "${LOG_PREFIX}_cleanup.log" "--events=0"
+	run_sysbench "$test" "prepare" "$ENDURANCE_THREADS" "$ENDURANCE_TABLES" "$ENDURANCE_SIZE" "$ENDURANCE_PS" 1200 "${LOG_PREFIX}_prepare.log" "--events=0"
+	run_sysbench "$test" "run" "$ENDURANCE_THREADS" "$ENDURANCE_TABLES" "$ENDURANCE_SIZE" "$ENDURANCE_PS" "$ENDURANCE_TIME" "${LOG_PREFIX}_run.log" "--events=0"
+done
+
+echo "========================================================"
+echo "All testing complete for $REGATTA_URL. Logs available in $LOG_DIR"
