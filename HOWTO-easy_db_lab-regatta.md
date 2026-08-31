@@ -145,6 +145,8 @@ sudo losetup -f --show --direct-io=on /mnt/db1/regatta-block-0
 ```
 $EDB kit install regatta   --namespace regatta   --regatta-repo "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/regatta" --version "26.0.0.789"  --operator-image "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/operator:26.0.0.789" --size "500Gi" --rdb-device "/dev/loop3"
 
+$EDB kit install regatta   --namespace regatta   --regatta-repo "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/regatta" --version "26.0.0.789"  --operator-image "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/operator:26.0.0.789" --size "1.7Ti" --rdb-device "/dev/nvme2n1"
+
 $EDB regatta start
 ```
 
@@ -164,7 +166,7 @@ kubectl exec -n regatta -it test-runner-pod -- bash
 ```
 For example, this should work:
 ```
-REGATTA_PASS='RegattaDefault1234!' ~/cluster/bin/client_cli --user admin --url regatta-rdb-0:8850
+REGATTA_PASS='RegattaDefault1234!' ~/cluster/bin/client_cli --user admin --url regatta-sm:8840
 ```
 Use `kubectl cp` or a tar-pipe to get other files into the test-runner-pod:
 ```
