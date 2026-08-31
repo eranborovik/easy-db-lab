@@ -48,6 +48,12 @@ $EDB init regatta-${USER} \
 
 $EDB up
 
+echo
+echo "Copy the following lines into your shell to set up the environment for using the Regatta cluster:"
+echo EDB="$CLUSTER_DIR/easy-db-lab"
+echo "source $CLUSTER_DIR/env.sh"
+
+
 # The rest of the commands here should be executed only after the ecr-secret and RDB environment
 # (the storage device) are set up
 

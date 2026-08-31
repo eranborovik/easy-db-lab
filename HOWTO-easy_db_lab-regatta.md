@@ -93,10 +93,10 @@ $EDB init regatta-orr \
   --ebs.throughput 300
 $EDB up
 ```
-In every shell you plan to run from, it is advisable to do:
+In every shell you plan to run from, it is advisable to do (or wherever your working directory is):
 ```
 EDB="$HOME/git/easy-db-lab/clusters/regatta-<date>-<time>/easy-db-lab"
-source $EDB/env.sh
+source .../env.sh
 ```
 The `env.sh` does a lot.  It sets up the environment so that you can `ssh control0` and `ssh db0`.  It also sets up `kubectl` to know where the `kubeconfig` is.
 
