@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KIT_DIR="$(dirname "${SCRIPT_DIR}")"
+CLUSTER_DIR="$(cd "${KIT_DIR}/../.." && pwd)"
+
+if [ -f "${CLUSTER_DIR}/env.sh" ]; then
+  # shellcheck source=/dev/null
+  source "${CLUSTER_DIR}/env.sh" >/dev/null 2>&1 || true
+fi
+
+KUBECONFIG="${KUBECONFIG:-${CLUSTER_DIR}/kubeconfig}"
+FORCE_UNINSTALL="${FORCE_UNINSTALL:-false}"
+
+# Confirmation Prompt
+if [ "${FORCE_UNINSTALL}" != "true" ] && [ -t 0 ]; then
+  echo "WARNING: This will permanently delete the Regatta cluster, all operator resources, PersistentVolumeClaims, and PersistentVolumes (including all persistent database data on host disks)."
+  read -r -p "Are you sure you want to proceed? [y/N]: " confirm
+  if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+    echo "Uninstall aborted by user."
+    exit 0
+  fi
+fi
+
+echo "=== Uninstalling Regatta Kit ==="
+
+# 0. Delete Regatta Custom Resource & Wait for Pods to Terminate
+echo "Stopping Regatta Cluster and terminating pods..."
+kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" delete regattacluster "${KIT_NAME}" --ignore-not-found=true || true
+echo "Waiting for Regatta pods to terminate..."
+kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" wait --for=delete pod -l "app.kubernetes.io/instance=${KIT_NAME}" --timeout=120s 2>/dev/null || true
+kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" wait --for=delete pod -l "regatta.dev/cluster=${KIT_NAME}" --timeout=60s 2>/dev/null || true
+
+# 1. Delete all PersistentVolumeClaims in the namespace to release PVs
+echo "Deleting Regatta PersistentVolumeClaims..."
+kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" delete pvc --all --ignore-not-found=true || true
+
+# 2. Delete all PVs associated with this Regatta kit
+echo "Deleting Regatta PersistentVolumes..."
+PV_NAMES=$(kubectl --kubeconfig="${KUBECONFIG}" get pv -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | tr ' ' '\n' | grep -E "pv-(rdb-block|repo|logs)-${KIT_NAME}-" || true)
+
+if [ -n "$PV_NAMES" ]; then
+  while IFS= read -r pv_name; do
+    if [ -n "$pv_name" ]; then
+      echo "Deleting PV ${pv_name}..."
+      kubectl --kubeconfig="${KUBECONFIG}" delete pv "${pv_name}" --ignore-not-found=true || true
+    fi
+  done <<< "$PV_NAMES"
+fi
+
+# Cleanup filesystem directories on target DB nodes using a one-shot DaemonSet
+echo "Cleaning up host directories on DB nodes..."
+cat <<EOF | kubectl --kubeconfig="${KUBECONFIG}" apply -f -
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: regatta-dir-clean-${KIT_NAME}
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      name: regatta-dir-clean-${KIT_NAME}
+  template:
+    metadata:
+      labels:
+        name: regatta-dir-clean-${KIT_NAME}
+    spec:
+      nodeSelector:
+        type: db
+      restartPolicy: Always
+      containers:
+      - name: clean-dirs
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            rm -rf /host-db1/${KIT_NAME}
+            echo "Cleaned up /mnt/db1/${KIT_NAME}"
+            sleep 3600
+        volumeMounts:
+        - name: host-db1
+          mountPath: /host-db1
+      volumes:
+      - name: host-db1
+        hostPath:
+          path: /mnt/db1
+          type: DirectoryOrCreate
+EOF
+
+kubectl --kubeconfig="${KUBECONFIG}" rollout status daemonset/regatta-dir-clean-${KIT_NAME} -n default --timeout=30s || true
+kubectl --kubeconfig="${KUBECONFIG}" delete daemonset regatta-dir-clean-${KIT_NAME} -n default --ignore-not-found=true || true

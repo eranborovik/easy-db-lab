@@ -3,7 +3,6 @@ CLUSTER_DIR="clusters/regatta-$(date +%Y%m%d-%H%M%S)"
 mkdir -p "$CLUSTER_DIR"
 bin/create-easy-db-lab-wrapper "$CLUSTER_DIR"
 EDB="$CLUSTER_DIR/easy-db-lab"
-echo EDB="$CLUSTER_DIR/easy-db-lab"
 $EDB init regatta-multi \
 	--clean \
 	--ami ami-09977077680cafe45 \
@@ -13,7 +12,7 @@ $EDB init regatta-multi \
 	--ebs.throughput 300 \
 	--db.count 3 \
 	--db.instance-type r6id.4xlarge
-$EDB up
+# $EDB up
 # $EDB kit install regatta \
 #   --namespace regatta \
 #   --operator-image 694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/operator:26.0.0.789 \
@@ -21,4 +20,5 @@ $EDB up
 #   --version 26.0.0.789
 # $EDB regatta start
 
+echo EDB="$CLUSTER_DIR/easy-db-lab"
 ### Specifying a Regatta ECR image

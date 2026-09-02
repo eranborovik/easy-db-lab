@@ -55,6 +55,26 @@ args:
     description: "Memory-backed shared memory size"
     type: string
     default: "40Gi"
+  - flag: --force-uninstall
+    variable: FORCE_UNINSTALL
+    description: "Force uninstall without interactive confirmation prompt"
+    type: boolean
+    default: "false"
+  - flag: --rdb-threads
+    variable: RDB_NUM_THREADS
+    description: "Number of CPU worker threads for RDB (defaults to auto-detected optimal node CPU)"
+    type: string
+    default: ""
+  - flag: --rdb-ram-mb
+    variable: RDB_RAM_MB
+    description: "Megabytes of RAM for RDB (defaults to auto-detected 80%% node RAM in MB)"
+    type: string
+    default: ""
+  - flag: --sequencer-threads
+    variable: SEQUENCER_NUM_THREADS
+    description: "Number of CPU worker threads for Sequencer in SM (defaults to auto-detected optimal based on node CPU)"
+    type: string
+    default: ""
   - flag: --namespace
     variable: NAMESPACE
     description: "Kubernetes namespace for Regatta cluster and operator"
@@ -64,6 +84,8 @@ args:
 install:
   - type: namespace
     name: ${NAMESPACE}
+  - type: manifest
+    template: init-dirs-daemonset.yaml
   - type: manifest
     template: crd.yaml
   - type: manifest
@@ -76,10 +98,16 @@ install:
     namespace: ${NAMESPACE}
     condition: Available
     timeout: "180s"
+  - type: delete
+    kind: DaemonSet
+    name: regatta-dir-prep-${KIT_NAME}
+    namespace: ${NAMESPACE}
+  - type: shell
+    script: bin/install.sh
 
 start:
-  - type: manifest
-    template: pvs.yaml
+  - type: shell
+    script: bin/start.sh
   - type: manifest
     template: regattacluster.yaml
   - type: manifest
@@ -97,41 +125,38 @@ stop:
 
 uninstall:
   - type: delete
-    kind: PersistentVolume
-    name: pv-rdb-block-${KIT_NAME}-rdb-0
+    kind: RegattaCluster
+    name: ${KIT_NAME}
+    namespace: ${NAMESPACE}
     ignore-not-found: true
   - type: delete
-    kind: PersistentVolume
-    name: pv-repo-${KIT_NAME}-sm-0
+    kind: Service
+    name: ${KIT_NAME}-nodeport
+    namespace: ${NAMESPACE}
     ignore-not-found: true
-  - type: delete
-    kind: PersistentVolume
-    name: pv-logs-${KIT_NAME}-sm-0
-    ignore-not-found: true
-  - type: delete
-    kind: PersistentVolume
-    name: pv-repo-${KIT_NAME}-rdb-0
-    ignore-not-found: true
-  - type: delete
-    kind: PersistentVolume
-    name: pv-logs-${KIT_NAME}-rdb-0
-    ignore-not-found: true
+  - type: shell
+    script: bin/uninstall.sh
   - type: delete
     kind: Deployment
     name: regatta-operator
     namespace: ${NAMESPACE}
+    ignore-not-found: true
   - type: delete
     kind: RoleBinding
     name: regatta-operator
     namespace: ${NAMESPACE}
+    ignore-not-found: true
   - type: delete
     kind: Role
     name: regatta-operator
     namespace: ${NAMESPACE}
+    ignore-not-found: true
   - type: delete
     kind: ServiceAccount
     name: regatta-operator
     namespace: ${NAMESPACE}
+    ignore-not-found: true
   - type: delete
     kind: CustomResourceDefinition
     name: regattaclusters.regatta.dev
+    ignore-not-found: true

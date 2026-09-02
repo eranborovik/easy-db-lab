@@ -35,6 +35,8 @@ easy-db-lab regatta start
 
 # Uninstall Regatta and delete PVs
 easy-db-lab regatta uninstall
+# Or bypass confirmation prompt:
+easy-db-lab regatta uninstall --force-uninstall
 ```
 
 ## Running Benchmarks Inside K3s

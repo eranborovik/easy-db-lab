@@ -16,7 +16,7 @@ spec:
     runAsGroup: 999
     fsGroup: 999
   sequencer:
-    num_threads: 4
+    num_threads: __SEQUENCER_NUM_THREADS__
     ram_MB: 600
   gdd:
     num_threads: 1
@@ -26,8 +26,8 @@ spec:
     ram_MB: 350
   rdb:
     replicas: __REPLICAS__
-    num_threads: 16
-    ram_MB: 20000
+    num_threads: __RDB_NUM_THREADS__
+    ram_MB: __RDB_RAM_MB__
     service:
       type: LoadBalancer
       port: 8850
@@ -45,16 +45,16 @@ spec:
   resources:
     sm:
       requests:
-        cpu: "6"
+        cpu: "__SM_CPU__"
         memory: 1250M
       limits:
-        cpu: "6"
+        cpu: "__SM_CPU__"
         memory: 1250M
     rdb:
       requests:
-        cpu: "16"
-        memory: 20000M
+        cpu: "__RDB_NUM_THREADS__"
+        memory: __RDB_RAM_MB__M
       limits:
-        cpu: "40"
-        memory: 80000M
+        cpu: "__RDB_NUM_THREADS__"
+        memory: __RDB_RAM_MB__M
 
