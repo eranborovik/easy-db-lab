@@ -38,7 +38,7 @@ kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" delete pvc --all --ignore
 
 # 2. Delete all PVs associated with this Regatta kit
 echo "Deleting Regatta PersistentVolumes..."
-PV_NAMES=$(kubectl --kubeconfig="${KUBECONFIG}" get pv -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | tr ' ' '\n' | grep -E "pv-(rdb-block|repo|logs)-${KIT_NAME}-" || true)
+PV_NAMES=$(kubectl --kubeconfig="${KUBECONFIG}" get pv -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | tr ' ' '\n' | grep -E "pv-rdb-block-${KIT_NAME}-" || true)
 
 if [ -n "$PV_NAMES" ]; then
   while IFS= read -r pv_name; do

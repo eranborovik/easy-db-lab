@@ -11,7 +11,7 @@ spec:
     - name: ecr-secret
   containers:
     - name: test-client
-      image: 694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/test-client:26.0.0.816
+      image: 694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/test-client:26.0.0.789
       resources:
         requests:
           cpu: "4"
