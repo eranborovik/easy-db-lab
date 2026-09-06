@@ -67,7 +67,7 @@ class Init : PicoBaseCommand() {
         private const val DEFAULT_EBS_SIZE_GB = 256
 
         /** Control node instance type. Kept in sync with [InitConfig] control defaults. */
-        const val DEFAULT_CONTROL_INSTANCE_TYPE = "m5d.xlarge"
+        const val DEFAULT_CONTROL_INSTANCE_TYPE = "m5d.2xlarge"
 
         @JsonIgnore val log = KotlinLogging.logger {}
     }
@@ -136,6 +136,14 @@ class Init : PicoBaseCommand() {
         ],
     )
     var appInstanceType: String? = null
+
+    @Option(
+        names = ["--control.instance-type", "--control-instance-type"],
+        description = [
+            "Control node instance type. Set EASY_DB_LAB_CONTROL_INSTANCE_TYPE to set a default.",
+        ],
+    )
+    var controlInstanceType: String = System.getenv("EASY_DB_LAB_CONTROL_INSTANCE_TYPE") ?: DEFAULT_CONTROL_INSTANCE_TYPE
 
     @Option(
         names = ["--azs", "--az", "-z"],
@@ -310,6 +318,7 @@ class Init : PicoBaseCommand() {
     private fun validateParameters() {
         require(resolvedDbCount > 0) { "Number of database instances must be positive" }
         require(resolvedAppCount >= 0) { "Number of application instances cannot be negative" }
+        require(controlInstanceType.isNotBlank()) { "Control instance type cannot be blank" }
         require(ebsSize > 0) { "EBS size must be positive" }
         require(ebsIops >= 0) { "EBS IOPS cannot be negative" }
         require(ebsThroughput >= 0) { "EBS throughput cannot be negative" }
@@ -354,7 +363,7 @@ class Init : PicoBaseCommand() {
                         region = userConfig.region,
                         dbArch = deriveArch(resolvedDbInstanceType),
                         appArch = deriveArch(resolvedAppInstanceType),
-                        controlArch = deriveArch(DEFAULT_CONTROL_INSTANCE_TYPE),
+                        controlArch = deriveArch(controlInstanceType),
                     ),
                 tailscaleActive = userConfig.isTailscaleEnabled() && !noTailscale,
             )

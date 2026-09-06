@@ -6,11 +6,10 @@
 
 ## Background
 
-AMI: Amazon Machine Image
-
-ECR: Elastic Container Registry
-
-EDB: Easy DB Lab
+Terminogoloy
+- AMI: Amazon Machine Image
+- ECR: Elastic Container Registry
+- EDB: Easy DB Lab
 
 If you don't have any experience with Kubernetes, it's highly recommended that you read a backgrounder first.
 
@@ -26,12 +25,56 @@ Steps:
 5. Prepare the cluster node(s) for running RDB
 6. Install RDB
 
+## Install the AWS SSO on your WSL
+
+Install the `aws` CLI:
+```bash
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+unzip awscliv2.zip
+sudo ./aws/install
+```
+
+Steps:
+1. Run `aws configure sso --use-device-code`.
+2. For `SSO session name` give something like `reg-sso`
+3. When asked for `SSO start URL` and `SSO region` use the values shown in the AWS access portal
+4. For the rest of the setup, you can use the default values until you get to the stage that opens the browser and asks you to login
+5. When prompted to, pick the `sandbox-clusters` account ID
+6. Continue with default values until the end of the setup
+
+Once the setup is done, set the profile for `edl`:
+
+7. `vim ~/.aws/config`
+8. Add a new profile section for `edl` -- copy the existing profile you just set up and replace the profile name and region.  When done, the file should look like this:
+```
+[sso-session reg-sso]
+sso_start_url = https://identitycenter.amazonaws.com/ssoins-7223db127c184e2a
+sso_region = us-east-1
+sso_registration_scopes = sso:account:access
+
+[profile AdministratorAccess-694992585570]
+sso_session = reg-sso
+sso_account_id = 694992585570
+sso_role_name = AdministratorAccess
+region = us-east-1
+
+[profile edl]
+sso_session = reg-sso
+sso_account_id = 694992585570
+sso_role_name = AdministratorAccess
+region = us-west-2
+```
+
 ## Authenticate AWS (daily)
+
+If you installed the AWS SSO on your WSL, then all you need to do is `aws sso login --profile edl --use-device-code` every day.
+
+Otherwise, you need to do the steps below every day.
 
 Go to [www.google.com](https://www.google.com/)
 
 Choose 3x3 dots, select `AWS SSO`, choose `sandbox-clusters`, choose `Access keys`, choose `Option 2`.
-```
+```bash
 mkdir ~/.aws
 cat > ~/.aws/credentials
 <paste creds>
@@ -43,7 +86,7 @@ Choose `AdministratorAccess` to open the console.  Go to `EC2`, either in `Recen
 AWS console: https://us-west-2.console.aws.amazon.com/ec2/home?region=us-west-2#Instances:
 
 ## Easy DB LAB: git and build
-```
+```bash
 cd git
 git clone git@github.com:eranborovik/easy-db-lab.git
 cd git/easy-db-lab
@@ -60,16 +103,22 @@ Rename `~/.easy-db-lab/profile/default` to a backup folder.
 
 Run `easy-db-lab setup` - skip the AMI creation.  This gives EDB access to the AWS creds.
 
-The AWS Profile name is the name in square brackets in the first line of `~/.aws/credentials`.  If asked: these are some of the answers:
+The AWS Profile name is the name in square brackets in the first line of `~/.aws/credentials`.  Use `edl` if you set up aws sso on your wsl.  If asked: these are some of the answers:
 ```
 What's your email? []: mh@regatta.dev
 What AWS region do you use? [us-west-2]:
-AWS Profile name (or press Enter to enter credentials manually) []: 694992585570_AdministratorAccess
+AWS Profile name (or press Enter to enter credentials manually) []: 694992585570_AdministratorAccess *OR* edl
 ```
 Delete any stale buckets
 
 ## Build a remote server and start Easy DB Lab kubernetes and pods
 Either run `regatta-edb-test.sh` as is, or edit it first, or run it command-by-command.
+
+Example run:
+```bash
+~/git/easy-db-lab/regatta-edb-test.sh --db-count 3 --db-instance-type i4i.xlarge --app-count 1
+```
+Run with `--help` to see all the options.
 
 These commands do this:
 
@@ -78,10 +127,15 @@ These commands do this:
 - Set a session $EDB alias with today's workspace
 - Inits a new cluster with `$EDB init ...`
 - Spins up infra with `$EDB up`
-- Installs regatta with `$EDB kit install regatta ...`
+
+`regatta-edb-test.sh` stops here to give you the ability to install the ecr secret (permission to download the container images) and to control control over the cluster to install
+
+You still need to:
+- Install regatta with `$EDB kit install regatta ...`
+- Start the cluster with `$EDB regatta start`
 
 Example commands (if given by hand):
-```
+```bash
 EDB="$CLUSTER_DIR/easy-db-lab"
 $EDB init regatta-orr \
   --db.count 1 \
@@ -94,7 +148,7 @@ $EDB init regatta-orr \
 $EDB up
 ```
 In every shell you plan to run from, it is advisable to do (or wherever your working directory is):
-```
+```bash
 EDB="$HOME/git/easy-db-lab/clusters/regatta-<date>-<time>/easy-db-lab"
 source .../env.sh
 ```
@@ -103,25 +157,22 @@ The `env.sh` does a lot.  It sets up the environment so that you can `ssh contro
 ## Setup control node
 
 ### SSH into control0
-```
+```bash
 ssh control0
 ```
 
 ### Create ecr-secret to be able to pull images
-These next few code blocks are intended to be copy-pasted into the shell on `control0`.
-```
+These next code block is intended to be copy-pasted into the shell on `control0`.
+
+1. Ensure the namespace exists
+2. Get the ECR password token and create/update the Kubernetes Secret
+
+```bash
 ACCOUNT_ID="694992585570"
 REGION="us-west-2"
 NAMESPACE="regatta"
-```
-#### 1. Ensure the namespace exists
-```
 KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | \
   KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
-```
-#### 2. Get the ECR password token and create/update the Kubernetes Secret
-Don't miss the `TOKEN=` first line below.
-```
 TOKEN=$(aws ecr get-login-password --region ${REGION})
 KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create secret docker-registry ecr-secret \
   --namespace ${NAMESPACE} \
@@ -134,7 +185,9 @@ KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create secret docker-registry ecr-s
 ## Setup DB node
 
 ### SSH into db0 and create the RDB environment
-```
+
+This is needed only if you did not choose a `r8id.8xlarge` or `i4i.xlarge` for the RDB servers.
+```bash
 ssh db0
 sudo mkdir -p /mnt/db1/regatta
 sudo chmod -R 777 /mnt/db1/regatta
@@ -142,10 +195,33 @@ sudo fallocate -l 500G /mnt/db1/regatta-block-0
 sudo losetup -f --show --direct-io=on /mnt/db1/regatta-block-0
 ```
 ### Start regatta cluster
-```
-$EDB kit install regatta   --namespace regatta   --regatta-repo "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/regatta" --version "26.0.0.789"  --operator-image "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/operator:26.0.0.789" --size "500Gi" --rdb-device "/dev/loop3"
+```bash
+# Use this command for the servers that are not r8id.8xlarge and not i4i.xlarge
+$EDB kit install regatta \
+  --namespace regatta \
+  --regatta-repo "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/regatta" \
+  --version "26.0.0.789"  \
+  --operator-image "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/operator:26.0.0.789" \
+  --size "500Gi" \
+  --rdb-device "/dev/loop3"
 
-$EDB kit install regatta   --namespace regatta   --regatta-repo "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/regatta" --version "26.0.0.789"  --operator-image "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/operator:26.0.0.789" --size "1.7Ti" --rdb-device "/dev/nvme2n1"
+# If you are using a r8id.8xlarge, then use this command (--size and --rdb-device).
+$EDB kit install regatta \
+  --namespace regatta \
+  --regatta-repo "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/regatta" \
+  --version "26.0.0.789"  \
+  --operator-image "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/operator:26.0.0.789" \
+  --size "1.7Ti" \
+  --rdb-device "/dev/nvme2n1"
+
+# For i4i.xlarge
+$EDB kit install regatta \
+  --namespace regatta \
+  --regatta-repo "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/regatta" \
+  --version "26.0.0.789" \
+  --operator-image "694992585570.dkr.ecr.us-west-2.amazonaws.com/reg-k8s/operator:26.0.0.789" \
+  --size "872Gi" \
+  --rdb-device "/dev/nvme2n1"
 
 $EDB regatta start
 ```
@@ -156,22 +232,32 @@ The commands below presume that you have done `source env.sh` above.
 In the Kubernetes world, kind-of-everything is expected to run in a pod running in the same Kubernetes cluster.  It's thought of a "unnatural" for apps to run directly on the host node (or on bare-metal or directly on servers anywhere else, although this is clearly possible).
 
 To create Orr's test-runner-pod, do this:
-```
+```bash
 kubectl apply -n regatta -f qa-test-pod.yaml
 ```
 This will create a pod that has a `~/cluster/bin` with useful commands like client_cli.
 Use this command to log into it:
-```
+```bash
 kubectl exec -n regatta -it test-runner-pod -- bash
 ```
 For example, this should work:
-```
+```bash
 REGATTA_PASS='RegattaDefault1234!' ~/cluster/bin/client_cli --user admin --url regatta-sm:8840
 ```
 Use `kubectl cp` or a tar-pipe to get other files into the test-runner-pod:
-```
-cd git
-tar cf - bare-metal | kubectl exec -i -n regatta test-runner-pod -- tar xvf - -C /home/regatta
+```bash
+kubectl cp -n regatta /usr/bin/zstd test-runner-pod:/home/regatta/cluster/bin
+kubectl cp -n regatta ~/git/bare-metal-*tar.zst test-runner-pod:/home/regatta
+kubectl exec -i -n regatta test-runner-pod -- 'cd /home/regatta ; zstd -d < bare-metal-*tar.zst | tar xvf -'
+pushd ~/git
+kubectl exec -i -n regatta test-runner-pod -- mkdir /home/regatta/git
 tar cf - sysbench_regatta/src/sysbench sysbench_regatta/src/lua sysbench_regatta/third_party/regatta | \
-  kubectl exec -i -n regatta test-runner-pod -- tar xvf - -C /home/regatta
+  kubectl exec -i -n regatta test-runner-pod -- tar xvf - -C /home/regatta/git
+popd
+```
+
+## Trying different configurations on the same server network
+
+```bash
+$EDB regatta uninstall
 ```

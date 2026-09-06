@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+KIT_DIR="$(dirname "${SCRIPT_DIR}")"
+CLUSTER_DIR="$(cd "${KIT_DIR}/../.." && pwd)"
+
+if [ -f "${CLUSTER_DIR}/env.sh" ]; then
+  # shellcheck source=/dev/null
+  source "${CLUSTER_DIR}/env.sh" >/dev/null 2>&1 || true
+fi
+
+KUBECONFIG="${KUBECONFIG:-${CLUSTER_DIR}/kubeconfig}"
+SM_STATEFULSET="${KIT_NAME}-sm"
+SM_POD="${SM_STATEFULSET}-0"
+
+echo "=== Regatta Setup: Pinning SM StatefulSet to control node ==="
+
+CONTROL_NODE=$(kubectl --kubeconfig="${KUBECONFIG}" get nodes -l type=control -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+if [ -z "${CONTROL_NODE}" ]; then
+  echo "No Kubernetes node with label type=control was found; cannot pin ${SM_STATEFULSET}." >&2
+  exit 1
+fi
+
+found_statefulset=false
+for _ in $(seq 1 60); do
+  if kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" get statefulset "${SM_STATEFULSET}" >/dev/null 2>&1; then
+    found_statefulset=true
+    break
+  fi
+  sleep 2
+done
+
+if [ "${found_statefulset}" != "true" ]; then
+  echo "Timed out waiting for StatefulSet ${NAMESPACE}/${SM_STATEFULSET}." >&2
+  exit 1
+fi
+
+PATCH_FILE=$(mktemp /tmp/regatta-sm-placement-XXXXXX.yaml)
+trap 'rm -f "${PATCH_FILE}"' EXIT
+
+cat > "${PATCH_FILE}" <<'EOF'
+spec:
+  template:
+    spec:
+      nodeSelector:
+        type: control
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+EOF
+
+kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" patch statefulset "${SM_STATEFULSET}" --type=strategic --patch-file "${PATCH_FILE}"
+
+CURRENT_NODE=$(kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" get pod "${SM_POD}" -o jsonpath='{.spec.nodeName}' 2>/dev/null || true)
+if [ "${CURRENT_NODE}" != "${CONTROL_NODE}" ]; then
+  echo "Recreating ${SM_POD}; current node is ${CURRENT_NODE:-<none>}, target control node is ${CONTROL_NODE}."
+  kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" scale statefulset "${SM_STATEFULSET}" --replicas=0
+  kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" wait --for=delete pod "${SM_POD}" --timeout=180s 2>/dev/null || true
+  kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" delete pvc "repo-${SM_POD}" "logs-${SM_POD}" --ignore-not-found=true
+  kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" scale statefulset "${SM_STATEFULSET}" --replicas=1
+fi
+
+kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" rollout status statefulset/"${SM_STATEFULSET}" --timeout=180s
+
+ASSIGNED_NODE=$(kubectl --kubeconfig="${KUBECONFIG}" -n "${NAMESPACE}" get pod "${SM_POD}" -o jsonpath='{.spec.nodeName}' 2>/dev/null || true)
+if [ "${ASSIGNED_NODE}" != "${CONTROL_NODE}" ]; then
+  echo "${SM_POD} is running on '${ASSIGNED_NODE:-<none>}' instead of control node '${CONTROL_NODE}'." >&2
+  exit 1
+fi
+
+echo "${SM_POD} is pinned to ${CONTROL_NODE}."

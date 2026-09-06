@@ -106,6 +106,7 @@ class InitTest : BaseKoinTest() {
                     name == "my-cluster" &&
                         initConfig?.cassandraInstances == 3 &&
                         initConfig?.stressInstances == 0 &&
+                        initConfig?.controlInstanceType == "m5d.2xlarge" &&
                         initConfig?.region == "us-west-2"
                 },
             )
@@ -119,6 +120,7 @@ class InitTest : BaseKoinTest() {
             command.cassandraInstances = 6
             command.stressInstances = 2
             command.instanceType = "i3.2xlarge"
+            command.controlInstanceType = "m5d.4xlarge"
             command.execute()
 
             verify(mockClusterStateManager).save(
@@ -126,7 +128,8 @@ class InitTest : BaseKoinTest() {
                     name == "custom-cluster" &&
                         initConfig?.cassandraInstances == 6 &&
                         initConfig?.stressInstances == 2 &&
-                        initConfig?.instanceType == "i3.2xlarge"
+                        initConfig?.instanceType == "i3.2xlarge" &&
+                        initConfig?.controlInstanceType == "m5d.4xlarge"
                 },
             )
         }
@@ -224,6 +227,17 @@ class InitTest : BaseKoinTest() {
         }
 
         @Test
+        fun `control instance type can be set with dotted or dashed option`() {
+            val dotted = Init()
+            picocli.CommandLine(dotted).parseArgs("--control.instance-type", "m5d.4xlarge")
+            assertThat(dotted.controlInstanceType).isEqualTo("m5d.4xlarge")
+
+            val dashed = Init()
+            picocli.CommandLine(dashed).parseArgs("--control-instance-type", "m5d.8xlarge")
+            assertThat(dashed.controlInstanceType).isEqualTo("m5d.8xlarge")
+        }
+
+        @Test
         fun `legacy alias sets the value when the namespaced option is absent`() {
             val command = Init()
             picocli.CommandLine(command).parseArgs("--cassandra", "5", "--stress-instance", "z1.big")
@@ -250,18 +264,21 @@ class InitTest : BaseKoinTest() {
                 .thenReturn(InstanceTypeCapabilities(hasInstanceStore = true, supportedArchitectures = listOf("arm64")))
             whenever(mockEc2InstanceService.describeInstanceType("x86.app"))
                 .thenReturn(InstanceTypeCapabilities(hasInstanceStore = false, supportedArchitectures = listOf("x86_64")))
+            whenever(mockEc2InstanceService.describeInstanceType("arm.control"))
+                .thenReturn(InstanceTypeCapabilities(hasInstanceStore = false, supportedArchitectures = listOf("arm64")))
 
             val command = Init()
             command.clean = true
             command.instanceType = "arm.db"
             command.stressInstanceType = "x86.app"
+            command.controlInstanceType = "arm.control"
             command.execute()
 
             verify(mockClusterStateManager).save(
                 argThat {
                     initConfig?.dbArch == "ARM64" &&
                         initConfig?.appArch == "AMD64" &&
-                        initConfig?.controlArch == "AMD64"
+                        initConfig?.controlArch == "ARM64"
                 },
             )
         }

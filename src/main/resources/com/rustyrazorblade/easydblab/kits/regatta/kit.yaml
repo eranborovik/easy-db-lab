@@ -110,6 +110,8 @@ start:
     script: bin/start.sh
   - type: manifest
     template: regattacluster.yaml
+  - type: shell
+    script: bin/pin-sm-to-control.sh
   - type: manifest
     template: nodeport-service.yaml
 

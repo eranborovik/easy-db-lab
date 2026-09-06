@@ -33,6 +33,9 @@ metadata:
   labels:
     regatta.dev/cluster: ${KIT_NAME}-static
 spec:
+  claimRef:
+    namespace: ${NAMESPACE}
+    name: rdb-block-${KIT_NAME}-rdb-${idx}
   capacity:
     storage: ${STORAGE_SIZE}
   volumeMode: Block
@@ -46,7 +49,11 @@ spec:
     required:
       nodeSelectorTerms:
         - matchExpressions:
-            - key: node-ordinal
+            - key: type
+              operator: In
+              values:
+                - db
+            - key: easydblab.com/node-ordinal
               operator: In
               values:
                 - "${idx}"
@@ -87,39 +94,46 @@ if [ -z "$NUM_THREADS" ] || [ -z "$RAM_MB" ] || [ -z "$SEQ_THREADS" ]; then
   NODE_CPU="${NODE_CPU:-16}"
   MEM_TOTAL_MB="${MEM_TOTAL_MB:-32768}"
 
+  DB_NODES_COUNT="${DB_NODE_COUNT:-${DB_NODES_COUNT:-}}"
+  if [ -z "$DB_NODES_COUNT" ] || [ "$DB_NODES_COUNT" = "0" ]; then
+    DB_NODES_COUNT=$(kubectl --kubeconfig="${KUBECONFIG}" get nodes -l type=db --no-headers 2>/dev/null | awk 'END { print NR }' || true)
+  fi
+  DB_NODES_COUNT="${DB_NODES_COUNT:-1}"
+
   # Compute Sequencer threads (GDD=1, DCM=1 are constant)
   # > 18 cores: Sequencer = 4 (SM CPU = 6)
   # 9-18 cores: Sequencer = 2 (SM CPU = 4)
-  # <= 8 cores: Sequencer = 1 (SM CPU = 3)
+  # <= 8 cores: Sequencer = 2 (SM CPU = 4)
   if [ -z "$SEQ_THREADS" ]; then
     if [ "$NODE_CPU" -gt 18 ]; then
       SEQ_THREADS=4
-    elif [ "$NODE_CPU" -ge 9 ]; then
-      SEQ_THREADS=2
     else
-      SEQ_THREADS=1
+      SEQ_THREADS=2
     fi
   fi
 
   # SM pod CPU = Sequencer + GDD(1) + DCM(1)
   SM_CPU=$(( SEQ_THREADS + 2 ))
 
-  # Compute RDB threads:
-  # Aim for total budget = floor(0.80 * NODE_CPU).
-  # RDB_CPU = max(6, Budget - SM_CPU) when NODE_CPU >= 9,
-  # or max(1, NODE_CPU - SM_CPU) for smaller nodes.
+  # Compute RDB threads. Single-node Regatta shares the node with SM, so keep the
+  # conservative shared-node formula. Multi-node Regatta runs each RDB on its own
+  # DB node, so each RDB gets that node's full CPU count.
   if [ -z "$NUM_THREADS" ]; then
-    NUM_THREADS=$(awk -v c="$NODE_CPU" -v sm="$SM_CPU" 'BEGIN {
-      budget = int(c * 0.8);
-      rdb = budget - sm;
-      if (c >= 9) {
-        if (rdb < 6) rdb = 6;
-      } else {
-        if (rdb < 1) rdb = int(c - sm);
-        if (rdb < 1) rdb = 1;
-      }
-      print rdb;
-    }')
+    if [ "$DB_NODES_COUNT" -gt 1 ]; then
+      NUM_THREADS="$NODE_CPU"
+    else
+      NUM_THREADS=$(awk -v c="$NODE_CPU" -v sm="$SM_CPU" 'BEGIN {
+        budget = int(c * 0.8);
+        rdb = budget - sm;
+        if (c >= 9) {
+          if (rdb < 6) rdb = 6;
+        } else {
+          if (rdb < 1) rdb = int(c - sm);
+          if (rdb < 1) rdb = 1;
+        }
+        print rdb;
+      }')
+    fi
   fi
 
   # Compute 80% RAM in Megabytes (integer >= 1024)
@@ -131,7 +145,7 @@ fi
 # Derive SM total CPU
 SM_CPU=$(( SEQ_THREADS + 2 ))
 
-echo "Computed Regatta sizing: sequencer_threads=${SEQ_THREADS} (sm_cpu=${SM_CPU}), rdb_threads=${NUM_THREADS}, ram_MB=${RAM_MB}M"
+echo "Computed Regatta sizing: db_nodes=${DB_NODES_COUNT:-unknown}, node_cpu=${NODE_CPU:-unknown}, sequencer_threads=${SEQ_THREADS} (sm_cpu=${SM_CPU}), rdb_threads=${NUM_THREADS}, ram_MB=${RAM_MB}M"
 
 CLUSTER_YAML="${KIT_DIR}/regattacluster.yaml"
 
