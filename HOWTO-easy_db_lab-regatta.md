@@ -14,7 +14,7 @@ EDB: Easy DB Lab
 
 If you don't have any experience with Kubernetes, it's highly recommended that you read a backgrounder first.
 
-You will probably need `kubectl`.  Install with `sudo dnf install -y kuberctl`.
+You will probably need `kubectl`.  Install with `sudo dnf install -y kubectl`.
 
 ## Overview
 
