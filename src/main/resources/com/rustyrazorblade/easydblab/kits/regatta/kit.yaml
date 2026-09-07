@@ -82,14 +82,14 @@ args:
     default: "regatta"
   - flag: --sm-node-type
     variable: SM_NODE_TYPE
-    description: "Node pool (type label) that hosts the SM pod; falls back to the control node when no match exists"
+    description: "Node pool (type label) that hosts the SM pod; defaults to db for a single-node cluster and app otherwise"
     type: string
-    default: "app"
+    default: ""
   - flag: --sm-node-ordinal
     variable: SM_NODE_ORDINAL
     description: "Node ordinal within the SM node pool; empty means any node in that pool"
     type: string
-    default: "1"
+    default: ""
 
 install:
   - type: namespace

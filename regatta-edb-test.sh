@@ -8,7 +8,7 @@ Options:
   --db-count COUNT                 Number of database nodes (default: 1)
   --db-instance-type TYPE          Database node instance type (default: r6id.4xlarge)
   --cluster-dir DIR                Cluster workspace directory (default: clusters/regatta-YYYYMMDD-HHMMSS)
-  --app-count COUNT                Number of application/client nodes (default: 2)
+  --app-count COUNT                Number of application/client nodes (default: 1 for a single db node, else 2)
   --app-instance-type TYPE         Application/client node instance type (default: c6i.4xlarge)
   --control-instance-type TYPE     Control node instance type (default: m5d.xlarge)
   -h, --help                       Show this help text
@@ -19,7 +19,7 @@ fi
 DB_COUNT=1
 DB_INSTANCE_TYPE="r6id.4xlarge"
 CLUSTER_DIR="${CLUSTER_DIR:-}"
-APP_COUNT=2
+APP_COUNT=""
 APP_INSTANCE_TYPE="c6i.4xlarge"
 CONTROL_INSTANCE_TYPE="m5d.xlarge"
 
@@ -107,6 +107,16 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# A single db node hosts SM alongside RDB, so it only needs a client node; larger
+# clusters need a second app node for SM.
+if [[ -z "$APP_COUNT" ]]; then
+  if [[ "$DB_COUNT" -gt 1 ]]; then
+    APP_COUNT=2
+  else
+    APP_COUNT=1
+  fi
+fi
 
 # Use --cluster-dir if provided, else CLUSTER_DIR from the environment,
 # else default to a timestamped directory under clusters/regatta-YYYYMMDD-HHMMSS.

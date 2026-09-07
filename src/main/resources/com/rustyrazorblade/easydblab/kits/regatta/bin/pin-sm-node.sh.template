@@ -13,8 +13,8 @@ fi
 KUBECONFIG="${KUBECONFIG:-${CLUSTER_DIR}/kubeconfig}"
 SM_STATEFULSET="${KIT_NAME}-sm"
 SM_POD="${SM_STATEFULSET}-0"
-SM_NODE_TYPE="${SM_NODE_TYPE:-app}"
-SM_NODE_ORDINAL="${SM_NODE_ORDINAL:-1}"
+SM_NODE_TYPE="${SM_NODE_TYPE:-}"
+SM_NODE_ORDINAL="${SM_NODE_ORDINAL:-}"
 
 echo "=== Regatta Setup: Pinning SM StatefulSet to a dedicated node ==="
 
@@ -30,6 +30,25 @@ find_node() {
   kubectl --kubeconfig="${KUBECONFIG}" get nodes -l "$1" \
     -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
 }
+
+# Mirror the sizing branch in start.sh: a lone db node reserves sm_cpu for SM, so SM
+# belongs there; with several db nodes each RDB owns a whole node and SM needs its own.
+if [ -z "${SM_NODE_TYPE}" ]; then
+  DB_NODES_COUNT="${DB_NODE_COUNT:-}"
+  if [ -z "${DB_NODES_COUNT}" ] || [ "${DB_NODES_COUNT}" = "0" ]; then
+    DB_NODES_COUNT=$(kubectl --kubeconfig="${KUBECONFIG}" get nodes -l type=db --no-headers 2>/dev/null | awk 'END { print NR }' || true)
+  fi
+  DB_NODES_COUNT="${DB_NODES_COUNT:-1}"
+
+  if [ "${DB_NODES_COUNT}" -gt 1 ]; then
+    SM_NODE_TYPE="app"
+    SM_NODE_ORDINAL="${SM_NODE_ORDINAL:-1}"
+  else
+    SM_NODE_TYPE="db"
+    SM_NODE_ORDINAL="${SM_NODE_ORDINAL:-0}"
+  fi
+  echo "Derived SM placement from ${DB_NODES_COUNT} db node(s): type=${SM_NODE_TYPE}, ordinal=${SM_NODE_ORDINAL}."
+fi
 
 SELECTOR="$(node_selector "${SM_NODE_TYPE}" "${SM_NODE_ORDINAL}")"
 TARGET_NODE="$(find_node "${SELECTOR}")"
