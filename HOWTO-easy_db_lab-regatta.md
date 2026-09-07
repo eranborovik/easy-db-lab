@@ -103,9 +103,9 @@ Either run `regatta-edb-test.sh` as is, or edit it first, or run it command-by-c
 
 Example runs:
 ```bash
-~/git/easy-db-lab/regatta-edb-test.sh --db-count 3 --db-instance-type i4i.xlarge
+~/git/easy-db-lab/regatta-edb-test.sh --db-count 3 --db-instance-type i4i.xlarge --az a
 
-~/git/easy-db-lab/regatta-edb-test.sh --db-count 1 --db-instance-type r8id.8xlarge
+~/git/easy-db-lab/regatta-edb-test.sh --db-count 1 --db-instance-type r8id.8xlarge --az b
 ```
 Run with `--help` to see all the options.
 

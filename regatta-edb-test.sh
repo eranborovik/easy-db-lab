@@ -11,6 +11,8 @@ Options:
   --app-count COUNT                Number of application/client nodes (default: 1 for a single db node, else 2)
   --app-instance-type TYPE         Application/client node instance type (default: c6i.4xlarge)
   --control-instance-type TYPE     Control node instance type (default: m5d.xlarge)
+  --az ZONES                       Limit to availability zones, e.g. "a" for a single AZ
+                                   (default: let easy-db-lab spread across a, b, c)
   -h, --help                       Show this help text
 USAGE
   exit 0
@@ -22,6 +24,7 @@ CLUSTER_DIR="${CLUSTER_DIR:-}"
 APP_COUNT=""
 APP_INSTANCE_TYPE="c6i.4xlarge"
 CONTROL_INSTANCE_TYPE="m5d.xlarge"
+AZ=""
 
 require_value() {
   local option="$1"
@@ -100,6 +103,16 @@ while [[ $# -gt 0 ]]; do
       require_value "--control-instance-type" "$CONTROL_INSTANCE_TYPE"
       shift
       ;;
+    --az|--azs)
+      require_value "$1" "${2:-}"
+      AZ="$2"
+      shift 2
+      ;;
+    --az=*|--azs=*)
+      AZ="${1#*=}"
+      require_value "--az" "$AZ"
+      shift
+      ;;
     *)
       echo "Unknown option: $1" >&2
       echo "Run $0 --help for usage." >&2
@@ -134,6 +147,11 @@ fi
 
 EDB="$CLUSTER_DIR/easy-db-lab"
 
+AZ_ARGS=()
+if [[ -n "$AZ" ]]; then
+  AZ_ARGS=(--az "$AZ")
+fi
+
 #$EDB init regatta-multi \
 #	--clean \
 #  --db.count "$DB_COUNT" \
@@ -151,6 +169,7 @@ $EDB init regatta-${USER} \
   --app.count "$APP_COUNT" \
   --app.instance-type "$APP_INSTANCE_TYPE" \
   --control.instance-type "$CONTROL_INSTANCE_TYPE" \
+  "${AZ_ARGS[@]}" \
   --ami ami-09977077680cafe45 \
   --ebs.type io2 \
   --ebs.size 100 \
