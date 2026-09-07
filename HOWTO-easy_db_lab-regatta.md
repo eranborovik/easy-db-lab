@@ -1,10 +1,10 @@
 # How to run Regatta on Easy DB Lab (EDB) from start to finish
 - Hard work done by Orr Amsalem
-- This doc summary of that work by mh
-- 2026-08-31
+- This doc is a summary of that work by mh
+- 2026-09-07
 
 
-## Background
+## 1. Background
 
 Terminogoloy
 - AMI: Amazon Machine Image
@@ -15,7 +15,7 @@ If you don't have any experience with Kubernetes, it's highly recommended that y
 
 You will probably need `kubectl`.  Install with `sudo dnf install -y kubectl`.
 
-## Overview
+## 2. Overview
 
 Steps:
 1. Get Easy-DB-Lab if you don't already have it
@@ -24,20 +24,22 @@ Steps:
 4. Build the cluster and get Kubernetes running
 5. Prepare the cluster node(s) for running RDB
 6. Install RDB
+7. Bring up a test pod
+8. Log in to the test pod and run tests from there
 
 
-## Easy DB LAB: git and build
+## 3. Easy DB LAB: git and build
 ```bash
 cd git
 git clone git@github.com:eranborovik/easy-db-lab.git
-cd git/easy-db-lab
+cd easy-db-lab
 git checkout mh
 git fetch
 git pull
 ./gradlew installDist
 ```
 
-## Install the AWS SSO on your WSL
+## 4. Install the AWS SSO on your WSL
 
 Install the `aws` CLI:
 ```bash
@@ -77,16 +79,16 @@ sso_role_name = AdministratorAccess
 region = us-west-2
 ```
 
-## Authenticate AWS (daily)
+## 5. Authenticate AWS (daily)
 
 After you install the AWS SSO on your WSL, then all you need to do is `aws sso login --profile edl --use-device-code` every day.
 
-### Easy DB Lab: Setup creds (once only)
+### 5.1. Easy DB Lab: Setup creds (once only)
 Replace the default profile of EDL:
 
 Rename `~/.easy-db-lab/profile/default` to a backup folder.
 
-Run `easy-db-lab setup` - skip the AMI creation.  This gives EDB access to the AWS creds.
+Run `~/git/easy-db-lab/bin/easy-db-lab setup` - skip the AMI creation.  This gives EDB access to the AWS creds.
 
 When asked: these are some of the answers:
 ```
@@ -96,12 +98,14 @@ AWS Profile name (or press Enter to enter credentials manually) []: edl
 ```
 Delete any stale buckets
 
-## Build a remote server and start Easy DB Lab kubernetes and pods
+## 6. Build a remote server and start Easy DB Lab kubernetes and pods
 Either run `regatta-edb-test.sh` as is, or edit it first, or run it command-by-command.
 
-Example run:
+Example runs:
 ```bash
 ~/git/easy-db-lab/regatta-edb-test.sh --db-count 3 --db-instance-type i4i.xlarge
+
+~/git/easy-db-lab/regatta-edb-test.sh --db-count 1 --db-instance-type r8id.8xlarge
 ```
 Run with `--help` to see all the options.
 
@@ -139,14 +143,14 @@ source .../env.sh
 ```
 The `env.sh` does a lot.  It sets up the environment so that you can `ssh control0` and `ssh db0`.  It also sets up `kubectl` to know where the `kubeconfig` is.
 
-## Setup control node
+## 7. Setup control node
 
-### SSH into control0
+### 7.1. SSH into control0
 ```bash
 ssh control0
 ```
 
-### Create ecr-secret to be able to pull images
+### 7.2. Create ecr-secret to be able to pull images
 These next code block is intended to be copy-pasted into the shell on `control0`.
 
 1. Ensure the namespace exists
@@ -167,9 +171,9 @@ KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create secret docker-registry ecr-s
   --dry-run=client -o yaml | \
   KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
 ```
-## Setup DB node
+## 8. Setup DB node
 
-### SSH into db0 and create the RDB environment
+### 8.1. SSH into db0 and create the RDB environment
 
 This is needed only if you did not choose a `r8id.8xlarge` or `i4i.xlarge` for the RDB servers.
 ```bash
@@ -179,7 +183,7 @@ sudo chmod -R 777 /mnt/db1/regatta
 sudo fallocate -l 500G /mnt/db1/regatta-block-0
 sudo losetup -f --show --direct-io=on /mnt/db1/regatta-block-0
 ```
-### Start regatta cluster
+### 8.2. Start regatta cluster
 ```bash
 # Use this command for the servers that are not r8id.8xlarge and not i4i.xlarge
 $EDB kit install regatta \
@@ -211,24 +215,37 @@ $EDB kit install regatta \
 $EDB regatta start
 ```
 
-## Running a client pod
+Consider setting the version to `26.0.0.789-debug` if you need more insight into the goings-on inside the Regatta containers.  This should bring up containers with useful tools like `tar` and `less`.  The default image is stripped down to the bare minimum.
+
+## 9. Running a client pod
 The commands below presume that you have done `source env.sh` above.
 
 In the Kubernetes world, kind-of-everything is expected to run in a pod running in the same Kubernetes cluster.  It's thought of a "unnatural" for apps to run directly on the host node (or on bare-metal or directly on servers anywhere else, although this is clearly possible).
+
+### 9.1. Bring up a test pod
 
 To create Orr's test-runner-pod, do this:
 ```bash
 kubectl apply -n regatta -f qa-test-pod.yaml
 ```
 This will create a pod that has a `~/cluster/bin` with useful commands like client_cli.
+
+### 9.2. Log in to the test pod
+
 Use this command to log into it:
 ```bash
 kubectl exec -n regatta -it test-runner-pod -- bash
 ```
+
+### 9.3. Run tests from the test pod
+
 For example, this should work:
 ```bash
 REGATTA_PASS='RegattaDefault1234!' ~/cluster/bin/client_cli --user admin --url regatta-sm:8840
 ```
+
+### 9.4. Copying files to the test pod
+
 Use `kubectl cp` or a tar-pipe to get other files into the test-runner-pod:
 ```bash
 kubectl cp -n regatta /usr/bin/zstd test-runner-pod:/home/regatta/cluster/bin
@@ -241,14 +258,14 @@ tar cf - sysbench_regatta/src/sysbench sysbench_regatta/src/lua sysbench_regatta
 popd
 ```
 
-## Trying different configurations on the same server network
+## 10. Trying different configurations on the same server network
 
 ```bash
 $EDB regatta uninstall
 ```
 Follow this with a `$EDB kit install regatta`, and then the `$EDB regatta start`.
 
-## Cleanup
+## 11. Cleanup
 This kills the cluster and terminates all the servers.
 ```bash
 $EDB down

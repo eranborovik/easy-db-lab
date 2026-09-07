@@ -184,4 +184,5 @@ echo "Make sure to set up the ecr-secret and RDB environment before proceeding."
 # $EDB regatta start --rdb-threads 4
 
 echo EDB="$CLUSTER_DIR/easy-db-lab"
+echo 'Use "$EDB down" to stop the Regatta cluster.'
 ### Specifying a Regatta ECR image
