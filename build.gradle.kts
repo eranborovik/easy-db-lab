@@ -379,6 +379,13 @@ tasks.register<Exec>("testCassandraResolveRef") {
     commandLine = listOf("bash", ".github/cassandra-image/resolve-ref.test.sh")
 }
 
+tasks.register<Exec>("testRegattaSizing") {
+    group = "Verification"
+    description = "Unit-test Regatta RDB CPU sizing"
+    workingDir = file(".")
+    commandLine = listOf("bash", "src/test/bash/regatta-sizing.test.sh")
+}
+
 tasks.register<Exec>("testPackerScript") {
     group = "Verification"
     description = "Test a specific packer script (use -Pscript=path/to/script.sh)"

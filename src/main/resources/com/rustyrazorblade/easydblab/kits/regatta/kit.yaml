@@ -62,7 +62,7 @@ args:
     default: "false"
   - flag: --rdb-threads
     variable: RDB_NUM_THREADS
-    description: "Number of CPU worker threads for RDB (defaults to auto-detected optimal node CPU)"
+    description: "Number of CPU worker threads for RDB (defaults to DB-node CPU less SM CPU when app nodes exist)"
     type: string
     default: ""
   - flag: --rdb-ram-mb

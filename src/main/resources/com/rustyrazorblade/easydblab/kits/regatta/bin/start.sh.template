@@ -12,6 +12,9 @@ if [ -f "${CLUSTER_DIR}/env.sh" ]; then
 fi
 
 KUBECONFIG="${KUBECONFIG:-${CLUSTER_DIR}/kubeconfig}"
+# shellcheck source=../lib/regatta-sizing.sh
+# shellcheck disable=SC1091
+source "${KIT_DIR}/lib/regatta-sizing.sh"
 
 REPLICAS_COUNT="${REPLICAS:-}"
 if [ -z "$REPLICAS_COUNT" ] || [ "$REPLICAS_COUNT" = "0" ]; then
@@ -99,6 +102,7 @@ if [ -z "$NUM_THREADS" ] || [ -z "$RAM_MB" ] || [ -z "$SEQ_THREADS" ]; then
     DB_NODES_COUNT=$(kubectl --kubeconfig="${KUBECONFIG}" get nodes -l type=db --no-headers 2>/dev/null | awk 'END { print NR }' || true)
   fi
   DB_NODES_COUNT="${DB_NODES_COUNT:-1}"
+  APP_NODES_COUNT="${APP_NODE_COUNT:-0}"
 
   # Compute Sequencer threads (GDD=1, DCM=1 are constant)
   # > 18 cores: Sequencer = 4 (SM CPU = 6)
@@ -115,24 +119,14 @@ if [ -z "$NUM_THREADS" ] || [ -z "$RAM_MB" ] || [ -z "$SEQ_THREADS" ]; then
   # SM pod CPU = Sequencer + GDD(1) + DCM(1)
   SM_CPU=$(( SEQ_THREADS + 2 ))
 
-  # Compute RDB threads. Single-node Regatta shares the node with SM, so keep the
-  # conservative shared-node formula. Multi-node Regatta runs each RDB on its own
-  # DB node, so each RDB gets that node's full CPU count.
+  # Compute RDB threads. Multi-node Regatta runs each RDB on its own DB node, so
+  # each RDB gets that node's full CPU count. A single DB node shares with SM; when
+  # an app node is available for test workloads, RDB receives all CPU left by SM.
   if [ -z "$NUM_THREADS" ]; then
     if [ "$DB_NODES_COUNT" -gt 1 ]; then
       NUM_THREADS="$NODE_CPU"
     else
-      NUM_THREADS=$(awk -v c="$NODE_CPU" -v sm="$SM_CPU" 'BEGIN {
-        budget = int(c * 0.8);
-        rdb = budget - sm;
-        if (c >= 9) {
-          if (rdb < 6) rdb = 6;
-        } else {
-          if (rdb < 1) rdb = int(c - sm);
-          if (rdb < 1) rdb = 1;
-        }
-        print rdb;
-      }')
+      NUM_THREADS="$(regatta_rdb_threads "$NODE_CPU" "$SM_CPU" "$DB_NODES_COUNT" "$APP_NODES_COUNT")"
     fi
   fi
 
@@ -145,7 +139,7 @@ fi
 # Derive SM total CPU
 SM_CPU=$(( SEQ_THREADS + 2 ))
 
-echo "Computed Regatta sizing: db_nodes=${DB_NODES_COUNT:-unknown}, node_cpu=${NODE_CPU:-unknown}, sequencer_threads=${SEQ_THREADS} (sm_cpu=${SM_CPU}), rdb_threads=${NUM_THREADS}, ram_MB=${RAM_MB}M"
+echo "Computed Regatta sizing: db_nodes=${DB_NODES_COUNT:-unknown}, app_nodes=${APP_NODES_COUNT:-unknown}, node_cpu=${NODE_CPU:-unknown}, sequencer_threads=${SEQ_THREADS} (sm_cpu=${SM_CPU}), rdb_threads=${NUM_THREADS}, ram_MB=${RAM_MB}M"
 
 CLUSTER_YAML="${KIT_DIR}/regattacluster.yaml"
 
