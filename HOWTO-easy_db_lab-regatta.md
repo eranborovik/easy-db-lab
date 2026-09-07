@@ -25,6 +25,18 @@ Steps:
 5. Prepare the cluster node(s) for running RDB
 6. Install RDB
 
+
+## Easy DB LAB: git and build
+```bash
+cd git
+git clone git@github.com:eranborovik/easy-db-lab.git
+cd git/easy-db-lab
+git checkout mh
+git fetch
+git pull
+./gradlew installDist
+```
+
 ## Install the AWS SSO on your WSL
 
 Install the `aws` CLI:
@@ -67,47 +79,20 @@ region = us-west-2
 
 ## Authenticate AWS (daily)
 
-If you installed the AWS SSO on your WSL, then all you need to do is `aws sso login --profile edl --use-device-code` every day.
+After you install the AWS SSO on your WSL, then all you need to do is `aws sso login --profile edl --use-device-code` every day.
 
-Otherwise, you need to do the steps below every day.
-
-Go to [www.google.com](https://www.google.com/)
-
-Choose 3x3 dots, select `AWS SSO`, choose `sandbox-clusters`, choose `Access keys`, choose `Option 2`.
-```bash
-mkdir ~/.aws
-cat > ~/.aws/credentials
-<paste creds>
-^D
-chmod 600 ~/.aws/credentials
-```
-Choose `AdministratorAccess` to open the console.  Go to `EC2`, either in `Recently used` or through the menu by choosing `All services`, then `EC2`.  Select region `us-west-2` in the top right corner.
-
-AWS console: https://us-west-2.console.aws.amazon.com/ec2/home?region=us-west-2#Instances:
-
-## Easy DB LAB: git and build
-```bash
-cd git
-git clone git@github.com:eranborovik/easy-db-lab.git
-cd git/easy-db-lab
-git checkout orr/edl-regatta
-git fetch
-git pull
-./gradlew installDist
-```
-
-## Easy DB Lab: Setup creds (daily)
+### Easy DB Lab: Setup creds (once only)
 Replace the default profile of EDL:
 
 Rename `~/.easy-db-lab/profile/default` to a backup folder.
 
 Run `easy-db-lab setup` - skip the AMI creation.  This gives EDB access to the AWS creds.
 
-The AWS Profile name is the name in square brackets in the first line of `~/.aws/credentials`.  Use `edl` if you set up aws sso on your wsl.  If asked: these are some of the answers:
+When asked: these are some of the answers:
 ```
 What's your email? []: mh@regatta.dev
 What AWS region do you use? [us-west-2]:
-AWS Profile name (or press Enter to enter credentials manually) []: 694992585570_AdministratorAccess *OR* edl
+AWS Profile name (or press Enter to enter credentials manually) []: edl
 ```
 Delete any stale buckets
 
@@ -116,7 +101,7 @@ Either run `regatta-edb-test.sh` as is, or edit it first, or run it command-by-c
 
 Example run:
 ```bash
-~/git/easy-db-lab/regatta-edb-test.sh --db-count 3 --db-instance-type i4i.xlarge --app-count 1
+~/git/easy-db-lab/regatta-edb-test.sh --db-count 3 --db-instance-type i4i.xlarge
 ```
 Run with `--help` to see all the options.
 
@@ -261,3 +246,11 @@ popd
 ```bash
 $EDB regatta uninstall
 ```
+Follow this with a `$EDB kit install regatta`, and then the `$EDB regatta start`.
+
+## Cleanup
+This kills the cluster and terminates all the servers.
+```bash
+$EDB down
+```
+Please do not forget this step.

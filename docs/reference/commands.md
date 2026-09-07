@@ -92,7 +92,7 @@ determined fails at `init`, before any instance is created.
 | `--app.count` (alias `--app`, `--stress`, `-s`) | Number of application instances | 0 |
 | `--db.instance-type` (alias `--instance`, `-i`) | Database instance type | i4i.xlarge |
 | `--app.instance-type` (alias `--stress-instance`, `-si`) | Application instance type | c6id.2xlarge |
-| `--control.instance-type` (alias `--control-instance-type`) | Control node instance type | m5d.2xlarge |
+| `--control.instance-type` (alias `--control-instance-type`) | Control node instance type | m5d.xlarge |
 | `--azs`, `-z` | Availability zones (e.g., `a,b,c`) | all |
 | `--ebs.type` | EBS volume type (NONE, gp2, gp3, io1, io2) | NONE |
 | `--ebs.size` | EBS volume size in GB | 256 |

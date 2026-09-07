@@ -67,7 +67,7 @@ class Init : PicoBaseCommand() {
         private const val DEFAULT_EBS_SIZE_GB = 256
 
         /** Control node instance type. Kept in sync with [InitConfig] control defaults. */
-        const val DEFAULT_CONTROL_INSTANCE_TYPE = "m5d.2xlarge"
+        const val DEFAULT_CONTROL_INSTANCE_TYPE = "m5d.xlarge"
 
         @JsonIgnore val log = KotlinLogging.logger {}
     }

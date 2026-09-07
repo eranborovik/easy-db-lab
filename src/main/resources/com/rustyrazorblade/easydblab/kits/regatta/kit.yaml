@@ -80,6 +80,16 @@ args:
     description: "Kubernetes namespace for Regatta cluster and operator"
     type: string
     default: "regatta"
+  - flag: --sm-node-type
+    variable: SM_NODE_TYPE
+    description: "Node pool (type label) that hosts the SM pod; falls back to the control node when no match exists"
+    type: string
+    default: "app"
+  - flag: --sm-node-ordinal
+    variable: SM_NODE_ORDINAL
+    description: "Node ordinal within the SM node pool; empty means any node in that pool"
+    type: string
+    default: "1"
 
 install:
   - type: namespace
@@ -111,7 +121,7 @@ start:
   - type: manifest
     template: regattacluster.yaml
   - type: shell
-    script: bin/pin-sm-to-control.sh
+    script: bin/pin-sm-node.sh
   - type: manifest
     template: nodeport-service.yaml
 

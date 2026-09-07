@@ -259,7 +259,7 @@ class KitConfigTest {
     }
 
     @Test
-    fun `regatta start pins sm to control node after creating cluster`() {
+    fun `regatta start pins sm to a dedicated node after creating cluster`() {
         val config =
             parse(
                 javaClass
@@ -271,7 +271,7 @@ class KitConfigTest {
         assertThat(config.start).hasSize(4)
         assertThat(config.start[0]).isEqualTo(InstallStep.Shell("bin/start.sh"))
         assertThat(config.start[1]).isEqualTo(InstallStep.Manifest("regattacluster.yaml"))
-        assertThat(config.start[2]).isEqualTo(InstallStep.Shell("bin/pin-sm-to-control.sh"))
+        assertThat(config.start[2]).isEqualTo(InstallStep.Shell("bin/pin-sm-node.sh"))
         assertThat(config.start[3]).isEqualTo(InstallStep.Manifest("nodeport-service.yaml"))
     }
 

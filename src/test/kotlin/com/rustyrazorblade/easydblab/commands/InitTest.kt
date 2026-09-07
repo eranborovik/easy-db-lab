@@ -106,7 +106,7 @@ class InitTest : BaseKoinTest() {
                     name == "my-cluster" &&
                         initConfig?.cassandraInstances == 3 &&
                         initConfig?.stressInstances == 0 &&
-                        initConfig?.controlInstanceType == "m5d.2xlarge" &&
+                        initConfig?.controlInstanceType == "m5d.xlarge" &&
                         initConfig?.region == "us-west-2"
                 },
             )

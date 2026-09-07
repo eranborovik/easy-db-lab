@@ -105,7 +105,7 @@ data class InitConfig(
     val ebsOptimized: Boolean = false,
     val open: Boolean = false,
     val controlInstances: Int = 1,
-    val controlInstanceType: String = "m5d.2xlarge",
+    val controlInstanceType: String = "m5d.xlarge",
     val tags: Map<String, String> = mapOf(),
     val dbArch: String = "AMD64",
     val appArch: String = "AMD64",

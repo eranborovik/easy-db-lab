@@ -214,7 +214,7 @@ class ClusterStateTest {
         assertThat(config.stressInstances).isEqualTo(0)
         assertThat(config.instanceType).isEqualTo("i4i.xlarge")
         assertThat(config.controlInstances).isEqualTo(1)
-        assertThat(config.controlInstanceType).isEqualTo("m5d.2xlarge")
+        assertThat(config.controlInstanceType).isEqualTo("m5d.xlarge")
     }
 
     @Test
