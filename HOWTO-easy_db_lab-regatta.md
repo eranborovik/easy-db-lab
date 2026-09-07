@@ -45,7 +45,7 @@ curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
 unzip awscliv2.zip
 sudo ./aws/install
 ```
-
+If the `curl` command doesn't work, copy it from the company OneDrive here: `"...\Engineering\Projects\OLTP Results\Artifacts\2026-09-07 AWS Linux CLI\awscli-exe-linux-x86_64.zip"`
 Steps:
 1. Run `aws configure sso --use-device-code`.
 2. For `SSO session name` give something like `reg-sso`
