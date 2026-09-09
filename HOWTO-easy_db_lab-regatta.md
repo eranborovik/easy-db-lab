@@ -171,19 +171,7 @@ KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl create secret docker-registry ecr-s
   --dry-run=client -o yaml | \
   KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl apply -f -
 ```
-## 8. Setup DB node
-
-### 8.1. SSH into db0 and create the RDB environment
-
-This is needed only if you did not choose a `r8id.8xlarge` or `i4i.xlarge` for the RDB servers.
-```bash
-ssh db0
-sudo mkdir -p /mnt/db1/regatta
-sudo chmod -R 777 /mnt/db1/regatta
-sudo fallocate -l 500G /mnt/db1/regatta-block-0
-sudo losetup -f --show --direct-io=on /mnt/db1/regatta-block-0
-```
-### 8.2. Start regatta cluster
+## 8. Start regatta cluster
 ```bash
 # Use this command for the servers that are not r8id.8xlarge and not i4i.xlarge
 $EDB kit install regatta \
